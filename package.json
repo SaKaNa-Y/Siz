@@ -1,0 +1,59 @@
+{
+  "name": "siz",
+  "type": "module",
+  "version": "0.1.0",
+  "packageManager": "pnpm@10.24.0",
+  "description": "Smarter npm package search & management CLI — search, favorite, tag and track packages.",
+  "license": "MIT",
+  "keywords": [
+    "cli",
+    "npm",
+    "search",
+    "packages",
+    "favorites",
+    "tags",
+    "discovery"
+  ],
+  "exports": {
+    ".": "./dist/index.js",
+    "./cli": "./dist/cli.js",
+    "./package.json": "./package.json"
+  },
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "siz": "./dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsx src/cli.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "pnpm run build"
+  },
+  "dependencies": {
+    "@clack/core": "^1.1.0",
+    "@clack/prompts": "^1.1.0",
+    "ansis": "^4.2.0",
+    "cac": "^7.0.0",
+    "fast-npm-meta": "^1.4.2",
+    "fzf": "^0.5.2",
+    "package-manager-detector": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsdown": "^0.15.6",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  }
+}

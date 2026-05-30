@@ -1,0 +1,260 @@
+import { exec } from 'node:child_process'
+import process from 'node:process'
+import ansis from 'ansis'
+import { suggestCategory } from '../core/categories.ts'
+import { buildInstallCommand, detectPM, formatCommand, runInstall } from '../core/pm.ts'
+import { searchPackages } from '../core/registry.ts'
+import { addTags, listPackages, setFavorite, sortByFavoriteThenName, trackPackage } from '../core/store.ts'
+import { highlightKeywords } from '../ui/highlight.ts'
+import { clack, ensure, pickDepType, pickSetAction } from '../ui/prompts.ts'
+import { searchPrompt, type SearchOption } from '../ui/search-prompt.ts'
+
+/** Versions seen during search, so track/favorite can store them. */
+const versionCache = new Map<string, string>()
+
+function openInBrowser(url: string): void {
+  const cmd =
+    process.platform === 'win32'
+      ? `start "" "${url}"`
+      : process.platform === 'darwin'
+        ? `open "${url}"`
+        : `xdg-open "${url}"`
+  exec(cmd)
+}
+
+type BoxResult =
+  | { kind: 'cancel' }
+  | { kind: 'empty' }
+  | { kind: 'selected'; names: string[] }
+
+/** Open the live, type-as-you-search multiselect box. */
+async function openSearchBox(seedQuery?: string): Promise<BoxResult> {
+  let searchResults: SearchOption[] = []
+  let lastSearchTerm = ''
+  let debounceTimer: ReturnType<typeof setTimeout> | null = null
+  const searchLoading = { value: false }
+
+  const selected = await searchPrompt({
+    message: 'Search npm packages',
+    placeholder: 'type to search · Enter (empty) to browse your tracked list',
+    initialInput: seedQuery,
+    onOpen(name) {
+      openInBrowser(`https://www.npmjs.com/package/${encodeURIComponent(name)}`)
+    },
+    options() {
+      const input = (this.userInput ?? '').trim()
+
+      if (!input) {
+        lastSearchTerm = ''
+        searchResults = []
+        searchLoading.value = false
+        if (debounceTimer) clearTimeout(debounceTimer)
+        return []
+      }
+
+      const isPackageName = !input.includes(' ')
+      const opts: SearchOption[] = []
+      if (isPackageName) {
+        opts.push({ value: input, label: ansis.cyan(input), hint: 'add directly' })
+      }
+
+      if (input !== lastSearchTerm) {
+        lastSearchTerm = input
+        searchResults = []
+        if (debounceTimer) clearTimeout(debounceTimer)
+
+        // eslint-disable-next-line @typescript-eslint/no-this-alias
+        const self = this
+        debounceTimer = setTimeout(async () => {
+          searchLoading.value = true
+          process.stdin.emit('keypress', '', { name: '' })
+          try {
+            const results = await searchPackages(input)
+            if (lastSearchTerm !== input) return
+
+            for (const pkg of results) versionCache.set(pkg.name, pkg.version)
+            const exactMatch = results.find((pkg) => pkg.name === input)
+            searchResults = results
+              .filter((pkg) => pkg.name !== input)
+              .map((pkg) => {
+                const desc = pkg.description
+                  ? pkg.description.length > 60
+                    ? `${pkg.description.slice(0, 57)}...`
+                    : pkg.description
+                  : undefined
+                return {
+                  value: pkg.name,
+                  label: `${highlightKeywords(pkg.name, input)} ${ansis.blue(`v${pkg.version}`)}`,
+                  hint: desc ? highlightKeywords(desc, input) : undefined,
+                }
+              })
+
+            const updatedOpts: SearchOption[] = []
+            if (isPackageName) {
+              updatedOpts.push({
+                value: input,
+                label: exactMatch
+                  ? `${ansis.cyan(input)} ${ansis.blue(`v${exactMatch.version}`)}`
+                  : ansis.cyan(input),
+                hint: 'add directly',
+              })
+            }
+            updatedOpts.push(...searchResults)
+            self.filteredOptions = updatedOpts
+            self.focusedValue = updatedOpts[0]?.value
+            process.stdin.emit('keypress', '', { name: '' })
+          } catch {
+            // Search failed silently — direct option still works.
+          } finally {
+            searchLoading.value = false
+          }
+        }, 300)
+      }
+
+      opts.push(...searchResults)
+      return opts
+    },
+    filter: () => true,
+    loading: searchLoading,
+  })
+
+  if (debounceTimer) clearTimeout(debounceTimer)
+  if (typeof selected === 'symbol') return { kind: 'cancel' }
+  const names = selected as string[]
+  if (names.length === 0) return { kind: 'empty' }
+  return { kind: 'selected', names }
+}
+
+/** Track a searched package, carrying over its cached version and a category guess. */
+function trackFromSearch(name: string): void {
+  trackPackage({ name, version: versionCache.get(name), category: suggestCategory({ name }) })
+}
+
+/** Run the chosen action against a set of package names. */
+async function runSetAction(names: string[]): Promise<void> {
+  const action = await pickSetAction(names)
+  switch (action) {
+    case 'cancel':
+      clack.outro('Done.')
+      return
+
+    case 'install': {
+      const { dev } = await pickDepType()
+      const agent = await detectPM()
+      const cmd = buildInstallCommand(agent, names, { dev })
+      const ok = ensure(
+        await clack.confirm({
+          message: `Run ${ansis.cyan(formatCommand(cmd))}?`,
+          initialValue: true,
+        }),
+      )
+      if (!ok) {
+        clack.outro('Aborted.')
+        return
+      }
+      clack.log.step(`Installing with ${ansis.bold(agent)}`)
+      const code = await runInstall(cmd)
+      if (code !== 0) {
+        clack.log.error(`Install exited with code ${code}`)
+        return
+      }
+      // Offer to track what we just installed.
+      const track = ensure(
+        await clack.confirm({ message: 'Track these in Siz too?', initialValue: true }),
+      )
+      if (track) {
+        for (const name of names) trackFromSearch(name)
+      }
+      clack.outro('Done.')
+      return
+    }
+
+    case 'favorite': {
+      for (const name of names) {
+        trackFromSearch(name)
+        setFavorite(name, true)
+      }
+      clack.log.success(`Favorited ${names.join(', ')} ❤`)
+      clack.outro('Done.')
+      return
+    }
+
+    case 'track': {
+      for (const name of names) trackFromSearch(name)
+      clack.log.success(`Tracking ${names.join(', ')}`)
+      clack.outro('Done.')
+      return
+    }
+
+    case 'tag': {
+      const input = ensure(
+        await clack.text({
+          message: 'Tags (space or comma separated)',
+          placeholder: 'lightweight production',
+        }),
+      )
+      const tags = input.split(/[\s,]+/).filter(Boolean)
+      for (const name of names) {
+        trackFromSearch(name)
+        if (tags.length) addTags(name, tags)
+      }
+      clack.log.success(`Tagged ${names.join(', ')}: ${tags.map((t) => `#${t}`).join(' ')}`)
+      clack.outro('Done.')
+      return
+    }
+
+    case 'copy': {
+      const agent = await detectPM()
+      const cmd = buildInstallCommand(agent, names)
+      console.log(`\n${ansis.cyan(formatCommand(cmd))}\n`)
+      clack.outro('Done.')
+      return
+    }
+  }
+}
+
+/** Empty-input path: pick from the user's tracked/favorited packages. */
+async function runBrowseTracked(): Promise<void> {
+  const tracked = sortByFavoriteThenName(listPackages())
+
+  if (tracked.length === 0) {
+    clack.log.info('No tracked packages yet. Search and Track or Favorite some first.')
+    clack.outro('Done.')
+    return
+  }
+
+  const selected = ensure(
+    await clack.multiselect<string>({
+      message: 'Your tracked packages',
+      required: false,
+      options: tracked.map((pkg) => ({
+        value: pkg.name,
+        label: `${pkg.favorite ? '❤ ' : ''}${pkg.name}`,
+        hint: [pkg.category, ...pkg.tags.map((t) => `#${t}`)].filter(Boolean).join(' ') || undefined,
+      })),
+    }),
+  )
+
+  if (selected.length === 0) {
+    clack.outro('Nothing selected.')
+    return
+  }
+  await runSetAction(selected)
+}
+
+/** Entry point for bare `siz` (and `siz <query>` which seeds the box). */
+export async function runInteractive(seedQuery?: string): Promise<void> {
+  clack.intro(ansis.bold.cyan('siz'))
+  const result = await openSearchBox(seedQuery)
+  switch (result.kind) {
+    case 'cancel':
+      clack.cancel('Cancelled.')
+      return
+    case 'empty':
+      await runBrowseTracked()
+      return
+    case 'selected':
+      await runSetAction(result.names)
+      return
+  }
+}
