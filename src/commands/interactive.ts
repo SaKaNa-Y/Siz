@@ -1,11 +1,14 @@
 import { exec } from 'node:child_process'
 import process from 'node:process'
 import ansis from 'ansis'
-import { suggestCategory } from '../core/categories.ts'
+import { normalizeCategory, suggestCategory } from '../core/categories.ts'
 import { buildInstallCommand, detectPM, formatCommand, runInstall } from '../core/pm.ts'
-import { searchPackages } from '../core/registry.ts'
+import { type SearchMode, searchPackages } from '../core/registry.ts'
+import { parseQuery } from '../core/query.ts'
 import { addTags, listPackages, setFavorite, sortByFavoriteThenName, trackPackage } from '../core/store.ts'
+import type { SearchResult, TrackedPackage } from '../core/types.ts'
 import { highlightKeywords } from '../ui/highlight.ts'
+import { categoryLabel } from '../ui/render.ts'
 import { clack, ensure, pickDepType, pickSetAction } from '../ui/prompts.ts'
 import { searchPrompt, type SearchOption } from '../ui/search-prompt.ts'
 
@@ -27,16 +30,56 @@ type BoxResult =
   | { kind: 'empty' }
   | { kind: 'selected'; names: string[] }
 
+/** Build the per-result option label/hint, depending on the search mode. */
+function toSearchOption(
+  pkg: SearchResult,
+  input: string,
+  mode: SearchMode,
+  tracked?: TrackedPackage,
+): SearchOption {
+  // Category/tag prefix: stored category + #tags for tracked packages,
+  // otherwise the heuristic category guess.
+  const prefix = tracked
+    ? [
+        tracked.category ? ansis.magenta(`[${tracked.category}]`) : '',
+        ...tracked.tags.map((t) => ansis.yellow(`#${t}`)),
+      ]
+        .filter(Boolean)
+        .join(' ')
+    : categoryLabel(pkg)
+
+  const name = `${highlightKeywords(pkg.name, input)} ${ansis.blue(`v${pkg.version}`)}`
+  const label = prefix ? `${prefix} ${name}` : name
+
+  // Descriptions are shown (and matched) only in description mode.
+  let hint: string | undefined
+  if (mode === 'description' && pkg.description) {
+    const desc = pkg.description.length > 60 ? `${pkg.description.slice(0, 57)}...` : pkg.description
+    hint = highlightKeywords(desc, input)
+  }
+
+  return { value: pkg.name, label, hint }
+}
+
 /** Open the live, type-as-you-search multiselect box. */
-async function openSearchBox(seedQuery?: string): Promise<BoxResult> {
+async function openSearchBox(seedQuery: string | undefined, mode: SearchMode): Promise<BoxResult> {
   let searchResults: SearchOption[] = []
   let lastSearchTerm = ''
   let debounceTimer: ReturnType<typeof setTimeout> | null = null
   const searchLoading = { value: false }
 
+  const placeholder =
+    mode === 'description'
+      ? 'full-text search · try keyword:cli or author:name'
+      : 'search by name · try keyword:cli · Enter (empty) to browse tracked'
+
+  // The tracked list does not change while the box is open (tracking happens
+  // later in runSetAction), so read it once instead of on every keystroke.
+  const trackedByName = new Map(listPackages().map((p) => [p.name, p]))
+
   const selected = await searchPrompt({
-    message: 'Search npm packages',
-    placeholder: 'type to search · Enter (empty) to browse your tracked list',
+    message: mode === 'description' ? 'Search npm (descriptions)' : 'Search npm packages',
+    placeholder,
     initialInput: seedQuery,
     onOpen(name) {
       openInBrowser(`https://www.npmjs.com/package/${encodeURIComponent(name)}`)
@@ -52,7 +95,8 @@ async function openSearchBox(seedQuery?: string): Promise<BoxResult> {
         return []
       }
 
-      const isPackageName = !input.includes(' ')
+      // A bare token (no spaces, no `key:value` qualifier) can be added directly.
+      const isPackageName = !input.includes(' ') && !input.includes(':')
       const opts: SearchOption[] = []
       if (isPackageName) {
         opts.push({ value: input, label: ansis.cyan(input), hint: 'add directly' })
@@ -69,25 +113,14 @@ async function openSearchBox(seedQuery?: string): Promise<BoxResult> {
           searchLoading.value = true
           process.stdin.emit('keypress', '', { name: '' })
           try {
-            const results = await searchPackages(input)
+            const results = await searchPackages(input, { mode })
             if (lastSearchTerm !== input) return
 
             for (const pkg of results) versionCache.set(pkg.name, pkg.version)
             const exactMatch = results.find((pkg) => pkg.name === input)
             searchResults = results
               .filter((pkg) => pkg.name !== input)
-              .map((pkg) => {
-                const desc = pkg.description
-                  ? pkg.description.length > 60
-                    ? `${pkg.description.slice(0, 57)}...`
-                    : pkg.description
-                  : undefined
-                return {
-                  value: pkg.name,
-                  label: `${highlightKeywords(pkg.name, input)} ${ansis.blue(`v${pkg.version}`)}`,
-                  hint: desc ? highlightKeywords(desc, input) : undefined,
-                }
-              })
+              .map((pkg) => toSearchOption(pkg, input, mode, trackedByName.get(pkg.name)))
 
             const updatedOpts: SearchOption[] = []
             if (isPackageName) {
@@ -214,11 +247,16 @@ async function runSetAction(names: string[]): Promise<void> {
 }
 
 /** Empty-input path: pick from the user's tracked/favorited packages. */
-async function runBrowseTracked(): Promise<void> {
-  const tracked = sortByFavoriteThenName(listPackages())
+async function runBrowseTracked(filters: { tag?: string; category?: string } = {}): Promise<void> {
+  const tracked = sortByFavoriteThenName(listPackages(filters))
 
   if (tracked.length === 0) {
-    clack.log.info('No tracked packages yet. Search and Track or Favorite some first.')
+    const filtered = filters.tag || filters.category
+    clack.log.info(
+      filtered
+        ? 'No tracked packages match that filter.'
+        : 'No tracked packages yet. Search and Track or Favorite some first.',
+    )
     clack.outro('Done.')
     return
   }
@@ -243,16 +281,23 @@ async function runBrowseTracked(): Promise<void> {
 }
 
 /** Entry point for bare `siz` (and `siz <query>` which seeds the box). */
-export async function runInteractive(seedQuery?: string): Promise<void> {
+export async function runInteractive(seedQuery?: string, mode: SearchMode = 'name'): Promise<void> {
   clack.intro(ansis.bold.cyan('siz'))
-  const result = await openSearchBox(seedQuery)
+  const result = await openSearchBox(seedQuery, mode)
   switch (result.kind) {
     case 'cancel':
       clack.cancel('Cancelled.')
       return
-    case 'empty':
-      await runBrowseTracked()
+    case 'empty': {
+      // Carry tag/category qualifiers from the seed into the tracked-list view,
+      // which filters against the user's own tags/categories.
+      const { qualifiers } = parseQuery(seedQuery ?? '')
+      await runBrowseTracked({
+        tag: qualifiers.tag?.[0],
+        category: qualifiers.category ? normalizeCategory(qualifiers.category) : undefined,
+      })
       return
+    }
     case 'selected':
       await runSetAction(result.names)
       return
