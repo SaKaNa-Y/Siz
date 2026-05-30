@@ -1,11 +1,17 @@
+import { Fzf } from 'fzf'
+import { normalizeCategory, suggestCategory } from './categories.ts'
+import { buildRegistryText, parseQuery } from './query.ts'
 import type { SearchResult } from './types.ts'
 
 const SEARCH_ENDPOINT = 'https://registry.npmjs.org/-/v1/search'
 
-/** Build the npm registry search URL for a query. */
-export function buildSearchUrl(query: string, size = 20): string {
+/** How matching is applied to a search. */
+export type SearchMode = 'name' | 'description'
+
+/** Build the npm registry search URL for an already-assembled text query. */
+export function buildSearchUrl(text: string, size = 20): string {
   const params = new URLSearchParams({
-    text: query,
+    text,
     size: String(Math.min(Math.max(size, 1), 250)),
   })
   return `${SEARCH_ENDPOINT}?${params.toString()}`
@@ -58,15 +64,74 @@ export function parseSearchResponse(body: unknown): SearchResult[] {
 }
 
 /**
- * Search the npm registry. Natural-language queries work because the endpoint
- * already ranks across name/description/keywords.
+ * Keep only results whose package *name* matches the given terms, ranked by
+ * fuzzy relevance (fzf) with the registry's final score as a tiebreaker.
+ * Descriptions are deliberately ignored here. Empty terms pass through.
  */
-export async function searchPackages(query: string, size = 20): Promise<SearchResult[]> {
-  const res = await fetch(buildSearchUrl(query, size), {
+export function filterByName(
+  results: SearchResult[],
+  terms: string[],
+  limit?: number,
+): SearchResult[] {
+  const query = terms.join(' ').trim()
+  if (!query) return limit ? results.slice(0, limit) : results
+
+  const fzf = new Fzf(results, {
+    selector: (r) => r.name,
+    tiebreakers: [(a, b) => b.item.score.final - a.item.score.final],
+  })
+  const ranked = fzf.find(query).map((entry) => entry.item)
+  return limit ? ranked.slice(0, limit) : ranked
+}
+
+/**
+ * Keep only results whose heuristic category (name/description/keywords) maps
+ * to the requested category. Unknown category strings filter to nothing.
+ */
+export function filterByCategory(results: SearchResult[], category: string): SearchResult[] {
+  const target = normalizeCategory(category)
+  if (!target) return []
+  return results.filter((r) => suggestCategory(r) === target)
+}
+
+export interface SearchOptions {
+  size?: number
+  mode?: SearchMode
+}
+
+/**
+ * Search the npm registry with Siz's query grammar.
+ *
+ * - Qualifiers (`keyword:`, `author:`, `scope:`) are sent to the registry,
+ *   which supports them natively; `category:` is filtered client-side.
+ * - In `name` mode, results are restricted/ranked to package-name matches and
+ *   descriptions are not used for matching. `description` mode keeps the
+ *   registry's full-text ranking.
+ */
+export async function searchPackages(
+  rawQuery: string,
+  opts: SearchOptions = {},
+): Promise<SearchResult[]> {
+  const { size = 20, mode = 'name' } = opts
+  const parsed = parseQuery(rawQuery)
+  const text = buildRegistryText(parsed)
+
+  const res = await fetch(buildSearchUrl(text, size), {
     headers: { accept: 'application/json' },
   })
   if (!res.ok) {
     throw new Error(`npm registry search failed: ${res.status} ${res.statusText}`)
   }
-  return parseSearchResponse(await res.json())
+  let results = parseSearchResponse(await res.json())
+
+  if (parsed.qualifiers.category) {
+    results = filterByCategory(results, parsed.qualifiers.category)
+  }
+  // Name mode narrows to name matches; an empty term list (qualifier-only
+  // query) passes through so e.g. `keyword:cli` still returns its results.
+  if (mode === 'name') {
+    results = filterByName(results, parsed.terms, size)
+  }
+
+  return results
 }

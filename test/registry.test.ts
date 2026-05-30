@@ -1,5 +1,25 @@
-import { describe, expect, it } from 'vitest'
-import { buildSearchUrl, parseSearchObject, parseSearchResponse } from '../src/core/registry.ts'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import {
+  buildSearchUrl,
+  filterByCategory,
+  filterByName,
+  parseSearchObject,
+  parseSearchResponse,
+  searchPackages,
+} from '../src/core/registry.ts'
+import type { SearchResult } from '../src/core/types.ts'
+
+/** Minimal SearchResult factory for filter/search tests. */
+function mkResult(partial: Partial<SearchResult> & { name: string }): SearchResult {
+  return {
+    version: '1.0.0',
+    description: '',
+    keywords: [],
+    score: { final: 0, quality: 0, popularity: 0, maintenance: 0 },
+    searchScore: 0,
+    ...partial,
+  }
+}
 
 describe('buildSearchUrl', () => {
   it('encodes the query into the text param', () => {
@@ -61,5 +81,87 @@ describe('parseSearchResponse', () => {
     expect(parseSearchResponse(null)).toEqual([])
     expect(parseSearchResponse({})).toEqual([])
     expect(parseSearchResponse({ objects: 'nope' })).toEqual([])
+  })
+})
+
+describe('filterByName', () => {
+  const results = [
+    mkResult({ name: 'react', score: { final: 0.9, quality: 0, popularity: 0, maintenance: 0 } }),
+    mkResult({ name: 'preact', score: { final: 0.5, quality: 0, popularity: 0, maintenance: 0 } }),
+    // Matches only via description — must be excluded by name filtering.
+    mkResult({ name: 'zustand', description: 'a small react state library' }),
+  ]
+
+  it('keeps only name matches and ignores description-only matches', () => {
+    const names = filterByName(results, ['react']).map((r) => r.name)
+    expect(names).toContain('react')
+    expect(names).not.toContain('zustand')
+  })
+
+  it('passes through (optionally limited) when there are no terms', () => {
+    expect(filterByName(results, [])).toHaveLength(3)
+    expect(filterByName(results, [], 2)).toHaveLength(2)
+  })
+
+  it('respects the limit', () => {
+    expect(filterByName(results, ['react'], 1)).toHaveLength(1)
+  })
+})
+
+describe('filterByCategory', () => {
+  it('keeps results whose heuristic category matches (case-insensitive)', () => {
+    const results = [
+      mkResult({ name: 'react', keywords: ['react'] }),
+      mkResult({ name: 'lodash', description: 'utilities' }),
+    ]
+    const names = filterByCategory(results, 'frontend').map((r) => r.name)
+    expect(names).toEqual(['react'])
+  })
+
+  it('returns [] for an unknown category', () => {
+    expect(filterByCategory([mkResult({ name: 'x' })], 'nope')).toEqual([])
+  })
+})
+
+describe('searchPackages', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  function mockFetch(names: string[]) {
+    const body = {
+      objects: names.map((name) => ({
+        package: { name, version: '1.0.0', description: `${name} desc` },
+      })),
+    }
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => ({ ok: true, json: async () => body }) as unknown as Response),
+    )
+  }
+
+  it('name mode restricts results to name matches', async () => {
+    mockFetch(['react', 'preact', 'vue'])
+    const results = await searchPackages('react', { mode: 'name' })
+    expect(results.map((r) => r.name)).not.toContain('vue')
+    expect(results.map((r) => r.name)).toContain('react')
+  })
+
+  it('description mode keeps the registry ordering', async () => {
+    mockFetch(['react', 'preact', 'vue'])
+    const results = await searchPackages('react', { mode: 'description' })
+    expect(results.map((r) => r.name)).toEqual(['react', 'preact', 'vue'])
+  })
+
+  it('sends qualifier-only queries to the registry and passes results through', async () => {
+    let calledUrl = ''
+    const fetchMock = vi.fn(async (url: string) => {
+      calledUrl = String(url)
+      return { ok: true, json: async () => ({ objects: [{ package: { name: 'cmd', version: '1.0.0' } }] }) } as unknown as Response
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    const results = await searchPackages('keyword:cli', { mode: 'name' })
+    expect(calledUrl).toContain('keywords%3Acli')
+    expect(results.map((r) => r.name)).toEqual(['cmd'])
   })
 })

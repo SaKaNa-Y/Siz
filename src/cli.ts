@@ -7,26 +7,38 @@ import { runList } from './commands/list.ts'
 import { runRemove } from './commands/remove.ts'
 import { runInteractive } from './commands/interactive.ts'
 import { runSearchPrint } from './commands/search.ts'
+import type { SearchMode } from './core/registry.ts'
 import { runTag, runUntag } from './commands/tag.ts'
 
 const cli = cac('siz')
 
-cli
-  .command('[...query]', 'Search npm and manage packages interactively')
-  .alias('search')
-  .option('-n, --size <n>', 'Number of results to fetch', { default: 20 })
-  .option('--json', 'Output raw JSON results (requires a query)')
-  .option('--list', 'Print results without the interactive box (requires a query)')
-  .action(async (query: string[], opts: { size: number; json?: boolean; list?: boolean }) => {
+/** Shared handler for the name (`siz`) and full-text (`siz search`) commands. */
+function searchAction(mode: SearchMode) {
+  return async (query: string[], opts: { size: number; json?: boolean; list?: boolean }) => {
     const q = query.join(' ').trim()
     // Non-interactive paths require a query.
     if ((opts.json || opts.list) && q) {
-      await runSearchPrint(q, { size: Number(opts.size), json: opts.json })
+      await runSearchPrint(q, { size: Number(opts.size), json: opts.json, mode })
       return
     }
     // Interactive: bare `siz` opens the search box; `siz <query>` seeds it.
-    await runInteractive(q || undefined)
-  })
+    await runInteractive(q || undefined, mode)
+  }
+}
+
+cli
+  .command('[...query]', 'Search npm packages by name (use qualifiers like keyword:cli)')
+  .option('-n, --size <n>', 'Number of results to fetch', { default: 20 })
+  .option('--json', 'Output raw JSON results (requires a query)')
+  .option('--list', 'Print results without the interactive box (requires a query)')
+  .action(searchAction('name'))
+
+cli
+  .command('search [...query]', 'Full-text search including package descriptions')
+  .option('-n, --size <n>', 'Number of results to fetch', { default: 20 })
+  .option('--json', 'Output raw JSON results (requires a query)')
+  .option('--list', 'Print results without the interactive box (requires a query)')
+  .action(searchAction('description'))
 
 cli
   .command('add <package> [...packages]', 'Track package(s) manually')
