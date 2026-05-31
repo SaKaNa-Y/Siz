@@ -19,6 +19,33 @@ Filter by test name: `pnpm vitest run -t "parses qualifiers"`
 
 Static-analysis gates (all run in CI): `pnpm lint` (oxlint, fails on errors), `pnpm format` (oxfmt `--check`), and `pnpm typecheck`. TypeScript is strict (ES2022 target, ESNext modules, `noUnusedLocals`/`noUnusedParameters`).
 
+## Releasing
+
+Releases run through **Changesets** — never `npm publish` manually. (`0.1.0` was published by hand, which is why it has no GitHub Release; every release from here on goes through the pipeline below so npm publish, the git tag, and the GitHub Release all happen together.)
+
+**Authoring a changeset** — every user-facing PR needs one (skip pure chore/docs/test PRs):
+
+- Run `pnpm changeset`, choose the bump level, and write a user-facing summary. This creates a markdown file under `.changeset/`.
+- Required frontmatter shape:
+
+  ```md
+  ---
+  "@sakana-y/siz": minor
+  ---
+
+  Human-readable, user-facing summary of the change.
+  ```
+
+  - The package name must be exactly `@sakana-y/siz`.
+  - Bump levels while `0.x`: `patch` = fixes/internal, `minor` = features **and** breaking changes (pre-1.0 convention), `major` is reserved for the 1.0 stabilization.
+  - One changeset per logical change; multiple are allowed per PR. The body is Markdown and becomes the `CHANGELOG.md` entry **and** the GitHub Release notes.
+
+**Release flow (end to end):** author changeset → merge PR to `main` → the Changesets bot opens/updates a **"Version Packages"** PR (bumps `package.json`, writes `CHANGELOG.md`) → review & merge that PR → `release.yml` runs `changeset publish` → npm publish (with provenance) + git tag + GitHub Release are created automatically. The first release after `0.1.0` (`0.1.1`/`0.2.0`) is the first to produce a real GitHub Release.
+
+**Rules:** never hand-edit `CHANGELOG.md` or bump `version` manually; don't merge the Version PR until you're ready to publish; `pnpm version-packages` runs `changeset version && pnpm format:fix` so the auto-generated Version PR stays green against the `pnpm format` gate.
+
+For contrast: this is the **Changesets** model (explicit, PR-driven, also used by `vue-grab`). `vitejs/devtools` uses **changelogithub** instead — tag-driven, generating releases from conventional commits.
+
 ## Architecture
 
 Three layers, top to bottom: **Commands** orchestrate flow → **Core** holds logic and data → **UI** renders and prompts.
