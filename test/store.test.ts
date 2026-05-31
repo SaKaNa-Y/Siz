@@ -2,6 +2,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+
 import {
   CURRENT_VERSION,
   addTags,
@@ -66,7 +67,9 @@ describe('migration is non-destructive (update-safety constraint)', () => {
     expect(typeof data.packages.lodash.addedAt).toBe('string')
 
     // Unknown fields (per-package and top-level) round-trip untouched.
-    expect((data.packages['some-future-pkg'] as unknown as Record<string, unknown>).futureField).toBe(42)
+    expect(
+      (data.packages['some-future-pkg'] as unknown as Record<string, unknown>).futureField,
+    ).toBe(42)
     expect(data.settings.theme).toBe('dark')
     expect((data as Record<string, unknown>).unknownTopLevel).toEqual({ keep: 'me' })
   })

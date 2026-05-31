@@ -1,7 +1,9 @@
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
-import { getDataFile } from './paths.ts'
+
 import type { SizData, TrackedPackage } from './types.ts'
+
+import { getDataFile } from './paths.ts'
 
 /** Current schema version. Bump when adding a migration step below. */
 export const CURRENT_VERSION = 1
@@ -145,7 +147,11 @@ export function addTags(name: string, tags: string[], file?: string): TrackedPac
   })
 }
 
-export function removeTags(name: string, tags: string[], file?: string): TrackedPackage | undefined {
+export function removeTags(
+  name: string,
+  tags: string[],
+  file?: string,
+): TrackedPackage | undefined {
   return withData(file, (data) => {
     const pkg = data.packages[name]
     if (!pkg) return undefined

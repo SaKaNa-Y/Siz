@@ -1,4 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+
+import type { SearchResult } from '../src/core/types.ts'
+
 import {
   buildSearchUrl,
   filterByCategory,
@@ -7,7 +10,6 @@ import {
   parseSearchResponse,
   searchPackages,
 } from '../src/core/registry.ts'
-import type { SearchResult } from '../src/core/types.ts'
 
 /** Minimal SearchResult factory for filter/search tests. */
 function mkResult(partial: Partial<SearchResult> & { name: string }): SearchResult {
@@ -43,7 +45,11 @@ describe('parseSearchObject', () => {
         version: '3.0.0',
         description: 'schema validation',
         keywords: ['validation', 'schema'],
-        links: { npm: 'https://npm/zod', homepage: 'https://zod.dev', repository: 'https://gh/zod' },
+        links: {
+          npm: 'https://npm/zod',
+          homepage: 'https://zod.dev',
+          repository: 'https://gh/zod',
+        },
         publisher: { username: 'colinhacks' },
       },
       score: { final: 0.9, detail: { quality: 0.95, popularity: 0.8, maintenance: 0.7 } },
@@ -157,7 +163,10 @@ describe('searchPackages', () => {
     let calledUrl = ''
     const fetchMock = vi.fn(async (url: string) => {
       calledUrl = String(url)
-      return { ok: true, json: async () => ({ objects: [{ package: { name: 'cmd', version: '1.0.0' } }] }) } as unknown as Response
+      return {
+        ok: true,
+        json: async () => ({ objects: [{ package: { name: 'cmd', version: '1.0.0' } }] }),
+      } as unknown as Response
     })
     vi.stubGlobal('fetch', fetchMock)
     const results = await searchPackages('keyword:cli', { mode: 'name' })

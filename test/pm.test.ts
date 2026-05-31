@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+
 import { buildInstallCommand, formatCommand } from '../src/core/pm.ts'
 
 describe('buildInstallCommand', () => {

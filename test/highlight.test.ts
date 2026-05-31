@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+
 import { highlightKeywords } from '../src/ui/highlight.ts'
 
 describe('highlightKeywords', () => {

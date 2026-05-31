@@ -35,15 +35,106 @@ const PRIORITY: Category[] = [
  * in a package's name, description, and keywords. Evaluated in PRIORITY order.
  */
 const HEURISTICS: Record<Category, string[]> = {
-  'State Management': ['redux', 'mobx', 'zustand', 'pinia', 'vuex', 'recoil', 'jotai', 'state management', 'store'],
-  Testing: ['test', 'jest', 'vitest', 'mocha', 'chai', 'cypress', 'playwright', 'assertion', 'spec', 'mock'],
-  'Build Tools': ['bundler', 'webpack', 'rollup', 'vite', 'esbuild', 'babel', 'compiler', 'transpile', 'build tool', 'tsup', 'tsdown'],
-  Database: ['database', 'orm', 'sql', 'mongo', 'postgres', 'mysql', 'sqlite', 'redis', 'prisma', 'sequelize', 'knex'],
-  UI: ['component', 'ui library', 'design system', 'css', 'tailwind', 'styled', 'chakra', 'antd', 'material', 'icons'],
-  Frontend: ['react', 'vue', 'svelte', 'angular', 'solid', 'frontend', 'browser', 'dom', 'spa', 'router', 'jsx'],
-  Backend: ['server', 'express', 'fastify', 'koa', 'nest', 'http', 'api', 'backend', 'middleware', 'graphql', 'rest'],
+  'State Management': [
+    'redux',
+    'mobx',
+    'zustand',
+    'pinia',
+    'vuex',
+    'recoil',
+    'jotai',
+    'state management',
+    'store',
+  ],
+  Testing: [
+    'test',
+    'jest',
+    'vitest',
+    'mocha',
+    'chai',
+    'cypress',
+    'playwright',
+    'assertion',
+    'spec',
+    'mock',
+  ],
+  'Build Tools': [
+    'bundler',
+    'webpack',
+    'rollup',
+    'vite',
+    'esbuild',
+    'babel',
+    'compiler',
+    'transpile',
+    'build tool',
+    'tsup',
+    'tsdown',
+  ],
+  Database: [
+    'database',
+    'orm',
+    'sql',
+    'mongo',
+    'postgres',
+    'mysql',
+    'sqlite',
+    'redis',
+    'prisma',
+    'sequelize',
+    'knex',
+  ],
+  UI: [
+    'component',
+    'ui library',
+    'design system',
+    'css',
+    'tailwind',
+    'styled',
+    'chakra',
+    'antd',
+    'material',
+    'icons',
+  ],
+  Frontend: [
+    'react',
+    'vue',
+    'svelte',
+    'angular',
+    'solid',
+    'frontend',
+    'browser',
+    'dom',
+    'spa',
+    'router',
+    'jsx',
+  ],
+  Backend: [
+    'server',
+    'express',
+    'fastify',
+    'koa',
+    'nest',
+    'http',
+    'api',
+    'backend',
+    'middleware',
+    'graphql',
+    'rest',
+  ],
   'CLI Tools': ['cli', 'command line', 'terminal', 'prompt', 'argv', 'commander', 'yargs'],
-  DevTools: ['lint', 'eslint', 'prettier', 'format', 'debug', 'devtool', 'logger', 'logging', 'typescript', 'types'],
+  DevTools: [
+    'lint',
+    'eslint',
+    'prettier',
+    'format',
+    'debug',
+    'devtool',
+    'logger',
+    'logging',
+    'typescript',
+    'types',
+  ],
 }
 
 /**
@@ -55,11 +146,7 @@ export function suggestCategory(pkg: {
   description?: string
   keywords?: string[]
 }): Category | undefined {
-  const haystack = [
-    pkg.name ?? '',
-    pkg.description ?? '',
-    ...(pkg.keywords ?? []),
-  ]
+  const haystack = [pkg.name ?? '', pkg.description ?? '', ...(pkg.keywords ?? [])]
     .join(' ')
     .toLowerCase()
 

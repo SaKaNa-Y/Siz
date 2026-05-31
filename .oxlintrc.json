@@ -1,0 +1,15 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["import", "typescript", "unicorn"],
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn",
+    "perf": "warn"
+  },
+  "ignorePatterns": ["dist", "node_modules", "coverage"],
+  "rules": {
+    // ansis is designed around a default export that also carries named
+    // members (ansis.red, ansis.bold, …); this access pattern is intentional.
+    "import/no-named-as-default-member": "off"
+  }
+}

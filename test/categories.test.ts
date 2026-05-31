@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+
 import { normalizeCategory, suggestCategory } from '../src/core/categories.ts'
 
 describe('suggestCategory', () => {
@@ -11,11 +12,18 @@ describe('suggestCategory', () => {
   })
 
   it('detects frontend frameworks', () => {
-    expect(suggestCategory({ name: 'react', description: 'A JavaScript library for building user interfaces' })).toBe('Frontend')
+    expect(
+      suggestCategory({
+        name: 'react',
+        description: 'A JavaScript library for building user interfaces',
+      }),
+    ).toBe('Frontend')
   })
 
   it('detects CLI tools', () => {
-    expect(suggestCategory({ name: 'cac', description: 'command line argument parser' })).toBe('CLI Tools')
+    expect(suggestCategory({ name: 'cac', description: 'command line argument parser' })).toBe(
+      'CLI Tools',
+    )
   })
 
   it('returns undefined when nothing matches', () => {

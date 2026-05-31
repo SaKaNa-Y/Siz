@@ -6,11 +6,7 @@ import ansis from 'ansis'
  * live search results.
  */
 export function highlightKeywords(text: string, query: string): string {
-  const terms = query
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean)
-    .map(escapeRegExp)
+  const terms = query.trim().split(/\s+/).filter(Boolean).map(escapeRegExp)
   if (terms.length === 0) return text
 
   const re = new RegExp(`(${terms.join('|')})`, 'gi')

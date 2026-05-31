@@ -1,4 +1,5 @@
 import ansis from 'ansis'
+
 import { addTags, removeTags } from '../core/store.ts'
 
 export function runTag(name: string, tags: string[]): void {
@@ -7,7 +8,9 @@ export function runTag(name: string, tags: string[]): void {
     return
   }
   const pkg = addTags(name, tags)
-  console.log(`${ansis.green('+')} ${ansis.bold(name)}  ${pkg.tags.map((t) => ansis.yellow(`#${t}`)).join(' ')}`)
+  console.log(
+    `${ansis.green('+')} ${ansis.bold(name)}  ${pkg.tags.map((t) => ansis.yellow(`#${t}`)).join(' ')}`,
+  )
 }
 
 export function runUntag(name: string, tags: string[]): void {

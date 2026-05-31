@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+
 import { buildRegistryText, parseQuery } from '../src/core/query.ts'
 
 describe('parseQuery', () => {

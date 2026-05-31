@@ -1,6 +1,8 @@
 import ansis from 'ansis'
-import { suggestCategory } from '../core/categories.ts'
+
 import type { SearchResult, TrackedPackage } from '../core/types.ts'
+
+import { suggestCategory } from '../core/categories.ts'
 
 /** A small 0..1 score bar like ▰▰▰▱▱. */
 export function scoreBar(value: number, width = 5): string {
@@ -23,10 +25,7 @@ export function renderSearchResult(
   state: { tracked?: boolean; favorite?: boolean; showDescription?: boolean } = {},
 ): string {
   const { showDescription = true } = state
-  const marks = [
-    state.favorite ? ansis.red('❤') : '',
-    state.tracked ? ansis.cyan('• tracked') : '',
-  ]
+  const marks = [state.favorite ? ansis.red('❤') : '', state.tracked ? ansis.cyan('• tracked') : '']
     .filter(Boolean)
     .join(' ')
 
@@ -39,7 +38,10 @@ export function renderSearchResult(
       : `  ${ansis.dim('(no description)')}`
   const keywords =
     showDescription && r.keywords.length
-      ? `  ${ansis.dim('keywords:')} ${r.keywords.slice(0, 8).map((k) => ansis.yellow(k)).join(', ')}`
+      ? `  ${ansis.dim('keywords:')} ${r.keywords
+          .slice(0, 8)
+          .map((k) => ansis.yellow(k))
+          .join(', ')}`
       : ''
   const quality = `  ${ansis.dim('quality')} ${scoreBar(r.score.quality)}  ${ansis.dim('popularity')} ${scoreBar(r.score.popularity)}`
 

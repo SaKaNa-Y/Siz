@@ -76,7 +76,10 @@ function applyQualifier(
     case 'keyword':
     case 'tag': {
       // Comma-separated values accumulate (logical OR on the npm side).
-      const values = value.split(',').map((v) => v.trim()).filter(Boolean)
+      const values = value
+        .split(',')
+        .map((v) => v.trim())
+        .filter(Boolean)
       q[key] = [...(q[key] ?? []), ...values]
       return
     }
