@@ -1,5 +1,3 @@
-import process from 'node:process'
-import { styleText } from 'node:util'
 import { AutocompletePrompt, isCancel } from '@clack/core'
 import {
   limitOptions,
@@ -9,6 +7,8 @@ import {
   S_CHECKBOX_SELECTED,
   symbol,
 } from '@clack/prompts'
+import process from 'node:process'
+import { styleText } from 'node:util'
 
 // Adapted from @rizumu/nai (MIT, https://github.com/LittleSound/nai),
 // src/prompts/search.ts — a search-capable multiselect prompt on @clack/core.
@@ -22,9 +22,7 @@ export interface SearchOption<T = string> {
 
 export interface SearchPromptOptions<T = string> {
   message: string
-  options:
-    | SearchOption<T>[]
-    | ((this: AutocompletePrompt<SearchOption<T>>) => SearchOption<T>[])
+  options: SearchOption<T>[] | ((this: AutocompletePrompt<SearchOption<T>>) => SearchOption<T>[])
   filter?: (search: string, option: SearchOption<T>) => boolean
   required?: boolean
   maxItems?: number
@@ -57,11 +55,7 @@ export async function searchPrompt<T = string>(
     filter: opts.filter,
     initialUserInput: opts.initialInput,
     validate: () => {
-      if (
-        opts.required &&
-        prompt.selectedValues.length === 0 &&
-        (prompt.userInput ?? '').trim()
-      )
+      if (opts.required && prompt.selectedValues.length === 0 && (prompt.userInput ?? '').trim())
         return 'Please select at least one item'
     },
     render(this: AutocompletePrompt<SearchOption<T>>) {
@@ -95,9 +89,7 @@ export async function searchPrompt<T = string>(
         case 'submit': {
           const header = `${styleText('gray', S_BAR)}\n${symbol(this.state)}  ${opts.message}`
           const submitInfo =
-            selectedCount > 0
-              ? `${selectedCount} selected`
-              : (opts.placeholder ?? '0 selected')
+            selectedCount > 0 ? `${selectedCount} selected` : (opts.placeholder ?? '0 selected')
           return `${header}\n${styleText('gray', S_BAR)}  ${styleText('dim', submitInfo)}`
         }
         case 'cancel': {
@@ -136,23 +128,17 @@ export async function searchPrompt<T = string>(
             if (option.disabled)
               return `${styleText('gray', S_CHECKBOX_INACTIVE)} ${styleText(['strikethrough', 'gray'] as const, label)}`
 
-            return active
-              ? `${checkbox} ${label}${hint}`
-              : `${checkbox} ${styleText('dim', label)}`
+            return active ? `${checkbox} ${label}${hint}` : `${checkbox} ${styleText('dim', label)}`
           }
 
           const placeholderLine =
-            !input && opts.placeholder
-              ? [`${bar}  ${styleText('dim', opts.placeholder)}`]
-              : []
+            !input && opts.placeholder ? [`${bar}  ${styleText('dim', opts.placeholder)}`] : []
           const noMatches =
             this.filteredOptions.length === 0 && input
               ? [`${bar}  ${styleText('yellow', 'No matches found')}`]
               : []
           const errorLines =
-            this.state === 'error'
-              ? [`${bar}  ${styleText('yellow', this.error)}`]
-              : []
+            this.state === 'error' ? [`${bar}  ${styleText('yellow', this.error)}`] : []
 
           const top = [
             ...header.split('\n'),
@@ -175,17 +161,12 @@ export async function searchPrompt<T = string>(
               : []
 
           const hints = isDirectOnly
-            ? [
-                `${styleText('dim', 'Tab:')} select`,
-                `${styleText('dim', 'Enter:')} confirm`,
-              ]
+            ? [`${styleText('dim', 'Tab:')} select`, `${styleText('dim', 'Enter:')} confirm`]
             : [
                 `${styleText('dim', '↑/↓')} navigate`,
                 `${styleText('dim', 'Tab:')} select`,
                 `${styleText('dim', 'Enter:')} confirm`,
-                ...(opts.onOpen
-                  ? [`${styleText('dim', 'Ctrl+O:')} browse`]
-                  : []),
+                ...(opts.onOpen ? [`${styleText('dim', 'Ctrl+O:')} browse`] : []),
               ]
 
           const bottom = [
@@ -206,11 +187,7 @@ export async function searchPrompt<T = string>(
                 })
               : []
 
-          return [
-            ...top,
-            ...list.map((line: string) => `${bar}  ${line}`),
-            ...bottom,
-          ].join('\n')
+          return [...top, ...list.map((line: string) => `${bar}  ${line}`), ...bottom].join('\n')
         }
       }
     },

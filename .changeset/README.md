@@ -17,4 +17,4 @@ pnpm changeset
 
 Pick the bump type (patch / minor / major) and write a short summary. This creates a markdown file in
 `.changeset/`. Commit it with your change. When it lands on `main`, the Release workflow opens (or updates)
-a "Version Packages" pull request; merging that PR publishes `siz` to npm and creates a GitHub Release.
+a "Version Packages" pull request; merging that PR publishes `@sakana-y/siz` to npm and creates a GitHub Release.

@@ -1,7 +1,9 @@
 import ansis from 'ansis'
+
+import type { SearchResult } from '../core/types.ts'
+
 import { type SearchMode, searchPackages } from '../core/registry.ts'
 import { listPackages } from '../core/store.ts'
-import type { SearchResult } from '../core/types.ts'
 import { renderSearchResult } from '../ui/render.ts'
 
 export interface SearchPrintOptions {

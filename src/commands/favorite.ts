@@ -1,4 +1,5 @@
 import ansis from 'ansis'
+
 import { setFavorite } from '../core/store.ts'
 
 export function runFavorite(name: string, favorite: boolean): void {

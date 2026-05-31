@@ -1,4 +1,3 @@
-
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project
@@ -12,23 +11,27 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `pnpm test` — run all tests once (`vitest run`)
 - `pnpm test:watch` — tests in watch mode (`vitest`)
 - `pnpm typecheck` — static type check (`tsc --noEmit`)
+- `pnpm lint` — lint with **oxlint** (`.oxlintrc.json`); `pnpm lint:fix` auto-fixes
+- `pnpm format` — check formatting with **oxfmt** (`.oxfmtrc.json`, import sorting on); `pnpm format:fix` writes
 
 Run a single test file: `pnpm vitest run test/query.test.ts`
 Filter by test name: `pnpm vitest run -t "parses qualifiers"`
 
-There is no lint script or eslint config — `pnpm typecheck` is the static-analysis gate. TypeScript is strict (ES2022 target, ESNext modules, `noUnusedLocals`/`noUnusedParameters`).
+Static-analysis gates (all run in CI): `pnpm lint` (oxlint, fails on errors), `pnpm format` (oxfmt `--check`), and `pnpm typecheck`. TypeScript is strict (ES2022 target, ESNext modules, `noUnusedLocals`/`noUnusedParameters`).
 
 ## Architecture
 
 Three layers, top to bottom: **Commands** orchestrate flow → **Core** holds logic and data → **UI** renders and prompts.
 
 **Entry / routing** — `src/cli.ts` uses `cac` to register subcommands and dispatch to `src/commands/*`:
+
 - bare `siz [query]` → `commands/interactive.ts` (or `commands/search.ts` for `--list` / `--json`)
 - `add`, `list`/`ls`, `fav`/`unfav`, `tag`/`untag`, `rm`
 
 **Main data flow** (interactive search): `interactive.ts` calls `core/registry.searchPackages()`, which hits the npm registry, parses GitHub-style qualifiers via `core/query.ts`, and fuzzy-filters with `fzf`. Results render through `ui/search-prompt.ts` (live multiselect) + `ui/render.ts`. Selected packages flow into local state via `core/store.ts` mutators, and install commands are built by `core/pm.ts`.
 
 **Core modules** (`src/core/`):
+
 - `registry.ts` — npm registry search + name/description filtering (fzf) + qualifier handling
 - `query.ts` — parses qualifiers: `keyword:`, `author:`, `scope:`, `category:`, `tag:`
 - `store.ts` — JSON persistence in the user config dir, non-destructive migrations, and tracking/favorite/tag mutators

@@ -1,7 +1,9 @@
 import { Fzf } from 'fzf'
+
+import type { SearchResult } from './types.ts'
+
 import { normalizeCategory, suggestCategory } from './categories.ts'
 import { buildRegistryText, parseQuery } from './query.ts'
-import type { SearchResult } from './types.ts'
 
 const SEARCH_ENDPOINT = 'https://registry.npmjs.org/-/v1/search'
 

@@ -1,13 +1,15 @@
 #!/usr/bin/env node
-import { cac } from 'cac'
 import ansis from 'ansis'
+import { cac } from 'cac'
+
+import type { SearchMode } from './core/registry.ts'
+
 import { runAdd } from './commands/add.ts'
 import { runFavorite } from './commands/favorite.ts'
+import { runInteractive } from './commands/interactive.ts'
 import { runList } from './commands/list.ts'
 import { runRemove } from './commands/remove.ts'
-import { runInteractive } from './commands/interactive.ts'
 import { runSearchPrint } from './commands/search.ts'
-import type { SearchMode } from './core/registry.ts'
 import { runTag, runUntag } from './commands/tag.ts'
 
 const cli = cac('siz')
@@ -56,8 +58,12 @@ cli
     runList({ tag: opts.tag, category: opts.category, fav: opts.fav })
   })
 
-cli.command('fav <package>', 'Mark a package as favorite').action((pkg: string) => runFavorite(pkg, true))
-cli.command('unfav <package>', 'Remove favorite mark').action((pkg: string) => runFavorite(pkg, false))
+cli
+  .command('fav <package>', 'Mark a package as favorite')
+  .action((pkg: string) => runFavorite(pkg, true))
+cli
+  .command('unfav <package>', 'Remove favorite mark')
+  .action((pkg: string) => runFavorite(pkg, false))
 
 cli
   .command('tag <package> [...tags]', 'Add tags to a package')

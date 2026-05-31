@@ -1,7 +1,8 @@
-import { spawn } from 'node:child_process'
-import { detect } from 'package-manager-detector/detect'
-import { resolveCommand } from 'package-manager-detector/commands'
 import type { Agent } from 'package-manager-detector'
+
+import { spawn } from 'node:child_process'
+import { resolveCommand } from 'package-manager-detector/commands'
+import { detect } from 'package-manager-detector/detect'
 
 export interface InstallCommand {
   command: string
@@ -13,12 +14,12 @@ export interface InstallCommand {
  * Most managers accept `-D`; bun uses `-d`; deno has no dev concept.
  */
 const DEV_FLAG: Partial<Record<Agent, string>> = {
-  'npm': '-D',
-  'pnpm': '-D',
+  npm: '-D',
+  pnpm: '-D',
   'pnpm@6': '-D',
-  'yarn': '-D',
+  yarn: '-D',
   'yarn@berry': '-D',
-  'bun': '-d',
+  bun: '-d',
   // deno: intentionally omitted (no dev dependencies)
 }
 

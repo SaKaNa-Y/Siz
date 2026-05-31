@@ -9,9 +9,9 @@ Inspired by [`@rizumu/nai`](https://github.com/LittleSound/nai): Siz keeps nai's
 ## 📦 Install
 
 ```bash
-npm i -g siz
+npm i -g @sakana-y/siz
 # or
-pnpm add -g siz
+pnpm add -g @sakana-y/siz
 ```
 
 Requires Node.js >= 20.19.
@@ -45,13 +45,13 @@ siz fast node logger         # box seeded with "fast node logger"
 
 Inside the box:
 
-| Key | Action |
-| --- | --- |
-| *type* | Search npm live (debounced) |
-| `↑` / `↓` | Move between results |
-| `Tab` | Select / deselect a package (multi-select) |
-| `Enter` | Confirm your selection |
-| `Ctrl+O` | Open the focused package on npmjs.com |
+| Key       | Action                                     |
+| --------- | ------------------------------------------ |
+| _type_    | Search npm live (debounced)                |
+| `↑` / `↓` | Move between results                       |
+| `Tab`     | Select / deselect a package (multi-select) |
+| `Enter`   | Confirm your selection                     |
+| `Ctrl+O`  | Open the focused package on npmjs.com      |
 
 After you confirm a selection, Siz shows an **action menu** for the chosen packages:
 
@@ -65,11 +65,11 @@ After you confirm a selection, Siz shows an **action menu** for the chosen packa
 
 For scripting or piping, pass a query with a flag:
 
-| Flag | Description |
-| --- | --- |
-| `--list` | Print matching results as text and exit (requires a query) |
-| `--json` | Print raw JSON results and exit (requires a query) |
-| `-n, --size <n>` | Number of results to fetch (default 20) |
+| Flag             | Description                                                |
+| ---------------- | ---------------------------------------------------------- |
+| `--list`         | Print matching results as text and exit (requires a query) |
+| `--json`         | Print raw JSON results and exit (requires a query)         |
+| `-n, --size <n>` | Number of results to fetch (default 20)                    |
 
 ```bash
 siz fast node logger --list
@@ -78,14 +78,14 @@ siz zod --json
 
 ## Commands
 
-| Command | Description |
-| --- | --- |
-| `siz` / `siz <query>` | Open the live search box (multi-select → install / favorite / track / tag) |
-| `siz add <pkg...>` | Track package(s) manually; resolves version + suggests a category |
-| `siz list` / `siz ls` | List tracked packages |
-| `siz fav <pkg>` / `siz unfav <pkg>` | Toggle favorite |
-| `siz tag <pkg> <tag...>` / `siz untag <pkg> <tag...>` | Manage custom tags |
-| `siz rm <pkg>` | Untrack a package |
+| Command                                               | Description                                                                |
+| ----------------------------------------------------- | -------------------------------------------------------------------------- |
+| `siz` / `siz <query>`                                 | Open the live search box (multi-select → install / favorite / track / tag) |
+| `siz add <pkg...>`                                    | Track package(s) manually; resolves version + suggests a category          |
+| `siz list` / `siz ls`                                 | List tracked packages                                                      |
+| `siz fav <pkg>` / `siz unfav <pkg>`                   | Toggle favorite                                                            |
+| `siz tag <pkg> <tag...>` / `siz untag <pkg> <tag...>` | Manage custom tags                                                         |
+| `siz rm <pkg>`                                        | Untrack a package                                                          |
 
 `siz list` filters:
 
@@ -107,14 +107,14 @@ Tags are free-form — define whatever you like (`favorite`, `frequently-used`, 
 
 ## 💾 Where your data lives (and why upgrades are safe)
 
-All of your favorites, tags, and tracked packages are stored in a single JSON file in your **user config directory** — *outside* the installed package:
+All of your favorites, tags, and tracked packages are stored in a single JSON file in your **user config directory** — _outside_ the installed package:
 
 - **Linux / macOS:** `$XDG_CONFIG_HOME/siz/data.json` (defaults to `~/.config/siz/data.json`)
 - **Windows:** `%APPDATA%\siz\data.json`
 
-Because this file lives in your home directory, **updating or reinstalling Siz never touches it**. On top of that, the file carries a schema `version`, and Siz applies **non-destructive migrations** on load: new versions only *add* fields and *never* drop your packages, favorites, tags, or any unknown keys. Writes are atomic (temp file + rename) to avoid corruption.
+Because this file lives in your home directory, **updating or reinstalling Siz never touches it**. On top of that, the file carries a schema `version`, and Siz applies **non-destructive migrations** on load: new versions only _add_ fields and _never_ drop your packages, favorites, tags, or any unknown keys. Writes are atomic (temp file + rename) to avoid corruption.
 
-You can safely run `npm i -g siz@latest` — your data stays put.
+You can safely run `npm i -g @sakana-y/siz@latest` — your data stays put.
 
 ## 🛠 Library usage
 
@@ -129,7 +129,7 @@ import {
   detectPM,
   buildInstallCommand,
   formatCommand,
-} from 'siz'
+} from '@sakana-y/siz'
 
 const results = await searchPackages('graphql client')
 trackPackage({ name: 'urql', category: suggestCategory({ name: 'urql' }) })

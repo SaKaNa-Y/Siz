@@ -1,4 +1,5 @@
 import ansis from 'ansis'
+
 import { suggestCategory } from '../core/categories.ts'
 import { resolveLatest } from '../core/meta.ts'
 import { trackPackage } from '../core/store.ts'

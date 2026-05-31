@@ -1,15 +1,23 @@
+import ansis from 'ansis'
 import { exec } from 'node:child_process'
 import process from 'node:process'
-import ansis from 'ansis'
+
+import type { SearchResult, TrackedPackage } from '../core/types.ts'
+
 import { normalizeCategory, suggestCategory } from '../core/categories.ts'
 import { buildInstallCommand, detectPM, formatCommand, runInstall } from '../core/pm.ts'
-import { type SearchMode, searchPackages } from '../core/registry.ts'
 import { parseQuery } from '../core/query.ts'
-import { addTags, listPackages, setFavorite, sortByFavoriteThenName, trackPackage } from '../core/store.ts'
-import type { SearchResult, TrackedPackage } from '../core/types.ts'
+import { type SearchMode, searchPackages } from '../core/registry.ts'
+import {
+  addTags,
+  listPackages,
+  setFavorite,
+  sortByFavoriteThenName,
+  trackPackage,
+} from '../core/store.ts'
 import { highlightKeywords } from '../ui/highlight.ts'
-import { categoryLabel } from '../ui/render.ts'
 import { clack, ensure, pickDepType, pickSetAction } from '../ui/prompts.ts'
+import { categoryLabel } from '../ui/render.ts'
 import { searchPrompt, type SearchOption } from '../ui/search-prompt.ts'
 
 /** Versions seen during search, so track/favorite can store them. */
@@ -25,10 +33,7 @@ function openInBrowser(url: string): void {
   exec(cmd)
 }
 
-type BoxResult =
-  | { kind: 'cancel' }
-  | { kind: 'empty' }
-  | { kind: 'selected'; names: string[] }
+type BoxResult = { kind: 'cancel' } | { kind: 'empty' } | { kind: 'selected'; names: string[] }
 
 /** Build the per-result option label/hint, depending on the search mode. */
 function toSearchOption(
@@ -54,7 +59,8 @@ function toSearchOption(
   // Descriptions are shown (and matched) only in description mode.
   let hint: string | undefined
   if (mode === 'description' && pkg.description) {
-    const desc = pkg.description.length > 60 ? `${pkg.description.slice(0, 57)}...` : pkg.description
+    const desc =
+      pkg.description.length > 60 ? `${pkg.description.slice(0, 57)}...` : pkg.description
     hint = highlightKeywords(desc, input)
   }
 
@@ -268,7 +274,8 @@ async function runBrowseTracked(filters: { tag?: string; category?: string } = {
       options: tracked.map((pkg) => ({
         value: pkg.name,
         label: `${pkg.favorite ? '❤ ' : ''}${pkg.name}`,
-        hint: [pkg.category, ...pkg.tags.map((t) => `#${t}`)].filter(Boolean).join(' ') || undefined,
+        hint:
+          [pkg.category, ...pkg.tags.map((t) => `#${t}`)].filter(Boolean).join(' ') || undefined,
       })),
     }),
   )
