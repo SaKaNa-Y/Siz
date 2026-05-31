@@ -6,7 +6,7 @@
   "semi": false,
   "singleQuote": true,
   "trailingComma": "all",
-  "ignorePatterns": ["dist/**", "node_modules/**", "coverage/**", "pnpm-lock.yaml"],
+  "ignorePatterns": ["dist/**", "node_modules/**", "coverage/**", "pnpm-lock.yaml", "**/*.md"],
   "sortImports": {
     "groups": [
       "type-import",
