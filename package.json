@@ -1,6 +1,6 @@
 {
   "name": "@sakana-y/siz",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Smarter npm package search & management CLI — search, favorite, tag and track packages.",
   "keywords": [
     "cli",
