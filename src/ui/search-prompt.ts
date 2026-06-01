@@ -36,6 +36,10 @@ export interface SearchPromptOptions<T = string> {
   placeholder?: string
   /** Pre-fill the search input (e.g. seed from a CLI query). */
   initialInput?: string
+  /** Per-row annotation appended after the label (already styled, e.g. a badge). */
+  badge?: (value: T) => string | undefined
+  /** Called when the user presses Ctrl+T on a focused option; followed by a re-render. */
+  onToggle?: (value: T) => void
 }
 
 /**
@@ -125,10 +129,14 @@ export async function searchPrompt<T = string>(
               ? styleText('green', S_CHECKBOX_SELECTED)
               : styleText('dim', S_CHECKBOX_INACTIVE)
 
+            const badge = opts.badge?.(option.value) ?? ''
+
             if (option.disabled)
               return `${styleText('gray', S_CHECKBOX_INACTIVE)} ${styleText(['strikethrough', 'gray'] as const, label)}`
 
-            return active ? `${checkbox} ${label}${hint}` : `${checkbox} ${styleText('dim', label)}`
+            return active
+              ? `${checkbox} ${label}${hint}${badge}`
+              : `${checkbox} ${styleText('dim', label)}${badge}`
           }
 
           const placeholderLine =
@@ -165,6 +173,7 @@ export async function searchPrompt<T = string>(
             : [
                 `${styleText('dim', '↑/↓')} navigate`,
                 `${styleText('dim', 'Tab:')} select`,
+                ...(opts.onToggle ? [`${styleText('dim', 'Ctrl+T:')} dep type`] : []),
                 `${styleText('dim', 'Enter:')} confirm`,
                 ...(opts.onOpen ? [`${styleText('dim', 'Ctrl+O:')} browse`] : []),
               ]
@@ -221,9 +230,24 @@ export async function searchPrompt<T = string>(
     : null
   if (openHandler) process.stdin.prependListener('keypress', openHandler)
 
+  // Ctrl+T runs the caller's toggle on the focused row, then forces a re-render.
+  // Ctrl+T is unbound in Node's readline, so (unlike plain ←/→, which the input
+  // consumes for cursor movement) it never mutates the typed search text.
+  const onToggle = opts.onToggle
+  const depHandler = onToggle
+    ? (_ch: unknown, key: { name?: string; ctrl?: boolean }) => {
+        if (key?.name === 't' && key.ctrl && prompt.focusedValue != null) {
+          onToggle(prompt.focusedValue)
+          process.stdin.emit('keypress', '', { name: '' })
+        }
+      }
+    : null
+  if (depHandler) process.stdin.prependListener('keypress', depHandler)
+
   const cleanup = () => {
     process.stdin.removeListener('keypress', spaceHandler)
     if (openHandler) process.stdin.removeListener('keypress', openHandler)
+    if (depHandler) process.stdin.removeListener('keypress', depHandler)
   }
 
   // Auto-select focused item on Enter when nothing is selected.

@@ -21,6 +21,7 @@ export { getConfigDir, getDataFile } from './core/paths.ts'
 export {
   detectPM,
   buildInstallCommand,
+  buildInstallCommands,
   formatCommand,
   runInstall,
   type InstallCommand,

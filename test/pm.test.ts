@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildInstallCommand, formatCommand } from '../src/core/pm.ts'
+import { buildInstallCommand, buildInstallCommands, formatCommand } from '../src/core/pm.ts'
 
 describe('buildInstallCommand', () => {
   it('builds npm install (deps)', () => {
@@ -34,5 +34,40 @@ describe('buildInstallCommand', () => {
     expect(cmd.args).not.toContain('-D')
     expect(cmd.args).not.toContain('-d')
     expect(cmd.args).toContain('@std/assert')
+  })
+})
+
+describe('buildInstallCommands', () => {
+  it('splits mixed prod/dev into two commands', () => {
+    const cmds = buildInstallCommands('pnpm', [
+      { name: 'react', dev: false },
+      { name: 'vitest', dev: true },
+      { name: 'eslint', dev: true },
+    ])
+    expect(cmds.map(formatCommand)).toEqual(['pnpm add react', 'pnpm add -D vitest eslint'])
+  })
+
+  it('returns a single command when all are prod', () => {
+    const cmds = buildInstallCommands('npm', [
+      { name: 'react', dev: false },
+      { name: 'vue', dev: false },
+    ])
+    expect(cmds.map(formatCommand)).toEqual(['npm i react vue'])
+  })
+
+  it('returns a single dev command when all are dev', () => {
+    const cmds = buildInstallCommands('bun', [{ name: 'typescript', dev: true }])
+    expect(cmds.map(formatCommand)).toEqual(['bun add -d typescript'])
+  })
+
+  it('drops the dev flag for deno', () => {
+    const cmds = buildInstallCommands('deno', [{ name: '@std/assert', dev: true }])
+    expect(cmds).toHaveLength(1)
+    expect(cmds[0].args).not.toContain('-D')
+    expect(cmds[0].args).not.toContain('-d')
+  })
+
+  it('returns no commands for an empty selection', () => {
+    expect(buildInstallCommands('npm', [])).toEqual([])
   })
 })

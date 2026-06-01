@@ -5,7 +5,7 @@ import process from 'node:process'
 import type { SearchResult, TrackedPackage } from '../core/types.ts'
 
 import { normalizeCategory, suggestCategory } from '../core/categories.ts'
-import { buildInstallCommand, detectPM, formatCommand, runInstall } from '../core/pm.ts'
+import { buildInstallCommands, detectPM, formatCommand, runInstall } from '../core/pm.ts'
 import { parseQuery } from '../core/query.ts'
 import { type SearchMode, searchPackages } from '../core/registry.ts'
 import {
@@ -16,7 +16,7 @@ import {
   trackPackage,
 } from '../core/store.ts'
 import { highlightKeywords } from '../ui/highlight.ts'
-import { clack, ensure, pickDepType, pickSetAction } from '../ui/prompts.ts'
+import { clack, ensure, pickPackageManager, pickSetAction } from '../ui/prompts.ts'
 import { categoryLabel } from '../ui/render.ts'
 import { searchPrompt, type SearchOption } from '../ui/search-prompt.ts'
 
@@ -33,7 +33,13 @@ function openInBrowser(url: string): void {
   exec(cmd)
 }
 
-type BoxResult = { kind: 'cancel' } | { kind: 'empty' } | { kind: 'selected'; names: string[] }
+/** A selected package plus its chosen dependency type (`dev` = devDependency). */
+type Selection = { name: string; dev: boolean }
+
+type BoxResult =
+  | { kind: 'cancel' }
+  | { kind: 'empty' }
+  | { kind: 'selected'; selections: Selection[] }
 
 /** Build the per-result option label/hint, depending on the search mode. */
 function toSearchOption(
@@ -83,10 +89,15 @@ async function openSearchBox(seedQuery: string | undefined, mode: SearchMode): P
   // later in runSetAction), so read it once instead of on every keystroke.
   const trackedByName = new Map(listPackages().map((p) => [p.name, p]))
 
+  // Per-package dependency type, populated by Ctrl+T inside the prompt.
+  const depTypes = new Map<string, boolean>()
+
   const selected = await searchPrompt({
     message: mode === 'description' ? 'Search npm (descriptions)' : 'Search npm packages',
     placeholder,
     initialInput: seedQuery,
+    badge: (name) => (depTypes.get(name) ? ` ${ansis.cyan('[dev]')}` : ` ${ansis.dim('[dep]')}`),
+    onToggle: (name) => depTypes.set(name, !depTypes.get(name)),
     onOpen(name) {
       openInBrowser(`https://www.npmjs.com/package/${encodeURIComponent(name)}`)
     },
@@ -161,7 +172,8 @@ async function openSearchBox(seedQuery: string | undefined, mode: SearchMode): P
   if (typeof selected === 'symbol') return { kind: 'cancel' }
   const names = selected as string[]
   if (names.length === 0) return { kind: 'empty' }
-  return { kind: 'selected', names }
+  const selections = names.map((name) => ({ name, dev: depTypes.get(name) ?? false }))
+  return { kind: 'selected', selections }
 }
 
 /** Track a searched package, carrying over its cached version and a category guess. */
@@ -169,8 +181,9 @@ function trackFromSearch(name: string): void {
   trackPackage({ name, version: versionCache.get(name), category: suggestCategory({ name }) })
 }
 
-/** Run the chosen action against a set of package names. */
-async function runSetAction(names: string[]): Promise<void> {
+/** Run the chosen action against a set of selected packages. */
+async function runSetAction(selections: Selection[]): Promise<void> {
+  const names = selections.map((s) => s.name)
   const action = await pickSetAction(names)
   switch (action) {
     case 'cancel':
@@ -178,12 +191,12 @@ async function runSetAction(names: string[]): Promise<void> {
       return
 
     case 'install': {
-      const { dev } = await pickDepType()
-      const agent = await detectPM()
-      const cmd = buildInstallCommand(agent, names, { dev })
+      const agent = await pickPackageManager(await detectPM())
+      const cmds = buildInstallCommands(agent, selections)
+      const styled = cmds.map((c) => ansis.cyan(formatCommand(c)))
       const ok = ensure(
         await clack.confirm({
-          message: `Run ${ansis.cyan(formatCommand(cmd))}?`,
+          message: `Run ${styled.join(' && ')}?`,
           initialValue: true,
         }),
       )
@@ -192,10 +205,12 @@ async function runSetAction(names: string[]): Promise<void> {
         return
       }
       clack.log.step(`Installing with ${ansis.bold(agent)}`)
-      const code = await runInstall(cmd)
-      if (code !== 0) {
-        clack.log.error(`Install exited with code ${code}`)
-        return
+      for (const cmd of cmds) {
+        const code = await runInstall(cmd)
+        if (code !== 0) {
+          clack.log.error(`Install exited with code ${code}`)
+          return
+        }
       }
       // Offer to track what we just installed.
       const track = ensure(
@@ -243,9 +258,9 @@ async function runSetAction(names: string[]): Promise<void> {
     }
 
     case 'copy': {
-      const agent = await detectPM()
-      const cmd = buildInstallCommand(agent, names)
-      console.log(`\n${ansis.cyan(formatCommand(cmd))}\n`)
+      const agent = await pickPackageManager(await detectPM())
+      const cmds = buildInstallCommands(agent, selections)
+      console.log(`\n${cmds.map((c) => ansis.cyan(formatCommand(c))).join('\n')}\n`)
       clack.outro('Done.')
       return
     }
@@ -284,7 +299,8 @@ async function runBrowseTracked(filters: { tag?: string; category?: string } = {
     clack.outro('Nothing selected.')
     return
   }
-  await runSetAction(selected)
+  // The tracked-list view has no Ctrl+T marking, so default everything to dependency.
+  await runSetAction(selected.map((name) => ({ name, dev: false })))
 }
 
 /** Entry point for bare `siz` (and `siz <query>` which seeds the box). */
@@ -306,7 +322,7 @@ export async function runInteractive(seedQuery?: string, mode: SearchMode = 'nam
       return
     }
     case 'selected':
-      await runSetAction(result.names)
+      await runSetAction(result.selections)
       return
   }
 }

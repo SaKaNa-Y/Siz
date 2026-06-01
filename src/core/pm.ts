@@ -51,6 +51,23 @@ export function buildInstallCommand(
   return { command: resolved.command, args: resolved.args }
 }
 
+/**
+ * Build install commands for a batch of packages, each tagged as a regular
+ * dependency or a devDependency. Splits into up to two commands (one per dep
+ * type), skipping empty groups. Pure — no side effects.
+ */
+export function buildInstallCommands(
+  agent: Agent,
+  selections: { name: string; dev: boolean }[],
+): InstallCommand[] {
+  const prod = selections.filter((s) => !s.dev).map((s) => s.name)
+  const dev = selections.filter((s) => s.dev).map((s) => s.name)
+  const cmds: InstallCommand[] = []
+  if (prod.length) cmds.push(buildInstallCommand(agent, prod))
+  if (dev.length) cmds.push(buildInstallCommand(agent, dev, { dev: true }))
+  return cmds
+}
+
 /** Human-readable form of an install command, e.g. `pnpm add -D react`. */
 export function formatCommand(cmd: InstallCommand): string {
   return [cmd.command, ...cmd.args].join(' ')

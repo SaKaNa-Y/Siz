@@ -1,3 +1,5 @@
+import type { Agent } from 'package-manager-detector'
+
 import * as p from '@clack/prompts'
 
 /** Abort cleanly if the user cancels a prompt. */
@@ -29,19 +31,26 @@ export async function pickSetAction(names: string[]): Promise<SetAction> {
   )
 }
 
-/** Choose dependency vs devDependency for an install. */
-export async function pickDepType(): Promise<{ dev: boolean }> {
-  const dev = ensure(
-    await p.select<boolean>({
-      message: 'Dependency type',
-      options: [
-        { value: false, label: 'dependencies' },
-        { value: true, label: 'devDependencies' },
-      ],
-      initialValue: false,
+/** Package managers offered in the install picker. */
+const PACKAGE_MANAGERS: Agent[] = ['npm', 'pnpm', 'yarn', 'bun', 'deno']
+
+/** Choose the package manager for an install, defaulting to the detected one. */
+export async function pickPackageManager(detected: Agent): Promise<Agent> {
+  // Ensure the detected agent is offered even if it's a variant (e.g. yarn@berry).
+  const options = PACKAGE_MANAGERS.includes(detected)
+    ? PACKAGE_MANAGERS
+    : [detected, ...PACKAGE_MANAGERS]
+  return ensure(
+    await p.select<Agent>({
+      message: 'Package manager',
+      initialValue: detected,
+      options: options.map((agent) => ({
+        value: agent,
+        label: agent,
+        hint: agent === detected ? 'detected' : undefined,
+      })),
     }),
   )
-  return { dev }
 }
 
 export { p as clack }
