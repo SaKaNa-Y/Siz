@@ -4,6 +4,7 @@ import { cac } from 'cac'
 
 import type { SearchMode } from './core/registry.ts'
 
+import packageJson from '../package.json' with { type: 'json' }
 import { runAdd } from './commands/add.ts'
 import { runFavorite } from './commands/favorite.ts'
 import { runInteractive } from './commands/interactive.ts'
@@ -28,7 +29,7 @@ function searchAction(mode: SearchMode) {
   }
 }
 
-cli
+const defaultCommand = cli
   .command('[...query]', 'Search npm packages by name (use qualifiers like keyword:cli)')
   .option('-n, --size <n>', 'Number of results to fetch', { default: 20 })
   .option('--json', 'Output raw JSON results (requires a query)')
@@ -75,8 +76,29 @@ cli
 
 cli.command('rm <package>', 'Untrack a package').action((pkg: string) => runRemove(pkg))
 
-cli.help()
-cli.version(process.env.npm_package_version ?? '0.1.0')
+// Render the full program help (the default command's), not the `help` command's own usage.
+cli.command('help', 'Show this help message').action(() => defaultCommand.outputHelp())
+cli.command('version', 'Show the installed version').action(() => cli.outputVersion())
+
+const EXAMPLES = [
+  'siz react form validation',
+  'siz search "state management" --list',
+  'siz add zod vitest',
+  'siz list --fav --tag lightweight',
+]
+
+cli.help((sections) => {
+  // Drop cac's verbose per-command "--help" footer.
+  const trimmed = sections.filter((s) => !s.title?.startsWith('For more info'))
+  // Only the top-level help lists Commands; enrich it with the description (kept in
+  // sync with package.json) and usage examples, leaving per-command help untouched.
+  if (trimmed.some((s) => s.title === 'Commands')) {
+    trimmed[0] = { ...trimmed[0], body: `${trimmed[0].body}\n${packageJson.description}` }
+    trimmed.push({ title: 'Examples', body: EXAMPLES.map((e) => `  $ ${e}`).join('\n') })
+  }
+  return trimmed
+})
+cli.version(packageJson.version)
 
 async function main() {
   try {

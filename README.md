@@ -86,6 +86,8 @@ siz zod --json
 | `siz fav <pkg>` / `siz unfav <pkg>`                   | Toggle favorite                                                            |
 | `siz tag <pkg> <tag...>` / `siz untag <pkg> <tag...>` | Manage custom tags                                                         |
 | `siz rm <pkg>`                                        | Untrack a package                                                          |
+| `siz help` / `siz --help`                             | Show help                                                                  |
+| `siz version` / `siz --version`                       | Show the installed version                                                 |
 
 `siz list` filters:
 

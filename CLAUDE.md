@@ -54,6 +54,7 @@ Three layers, top to bottom: **Commands** orchestrate flow → **Core** holds lo
 
 - bare `siz [query]` → `commands/interactive.ts` (or `commands/search.ts` for `--list` / `--json`)
 - `add`, `list`/`ls`, `fav`/`unfav`, `tag`/`untag`, `rm`
+- `help`, `version` — thin subcommands that reuse cac's built-in `outputHelp()` / `outputVersion()`; the version is sourced from `package.json` (imported), which also backs the `--version` flag
 
 **Main data flow** (interactive search): `interactive.ts` calls `core/registry.searchPackages()`, which hits the npm registry, parses GitHub-style qualifiers via `core/query.ts`, and fuzzy-filters with `fzf`. Results render through `ui/search-prompt.ts` (live multiselect) + `ui/render.ts`. Selected packages flow into local state via `core/store.ts` mutators, and install commands are built by `core/pm.ts`.
 
