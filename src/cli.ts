@@ -3,6 +3,7 @@ import ansis from 'ansis'
 import { cac } from 'cac'
 
 import type { SearchMode } from './core/registry.ts'
+import type { UpgradeMode } from './core/upgrade.ts'
 
 import packageJson from '../package.json' with { type: 'json' }
 import { runAdd } from './commands/add.ts'
@@ -12,6 +13,7 @@ import { runList } from './commands/list.ts'
 import { runRemove } from './commands/remove.ts'
 import { runSearchPrint } from './commands/search.ts'
 import { runTag, runUntag } from './commands/tag.ts'
+import { runUpgrade } from './commands/upgrade.ts'
 
 const cli = cac('siz')
 
@@ -49,6 +51,23 @@ cli
     await runAdd([pkg, ...packages])
   })
 
+const UPGRADE_LEVELS = ['major', 'minor', 'patch', 'latest'] as const
+
+cli
+  .command(
+    'upgrade [level]',
+    'Upgrade project dependencies (level: major | minor | patch | latest)',
+  )
+  .alias('up')
+  .option('--dry-run', 'Preview updates without writing package.json or installing')
+  .action(async (level: string | undefined, opts: { dryRun?: boolean }) => {
+    const mode = (level ?? 'latest') as UpgradeMode
+    if (!UPGRADE_LEVELS.includes(mode)) {
+      throw new Error(`Unknown upgrade level "${level}". Use: major | minor | patch | latest`)
+    }
+    await runUpgrade({ mode, dryRun: opts.dryRun })
+  })
+
 cli
   .command('list', 'List tracked packages')
   .alias('ls')
@@ -84,6 +103,7 @@ const EXAMPLES = [
   'siz react form validation',
   'siz search "state management" --list',
   'siz add zod vitest',
+  'siz upgrade minor',
   'siz list --fav --tag lightweight',
 ]
 

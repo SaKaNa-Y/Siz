@@ -1,5 +1,7 @@
 import ansis from 'ansis'
 
+import { escapeRegExp } from '../core/text.ts'
+
 /**
  * Highlight occurrences of each whitespace-separated term from `query`
  * within `text` (case-insensitive). Used to emphasize matches in the
@@ -11,8 +13,4 @@ export function highlightKeywords(text: string, query: string): string {
 
   const re = new RegExp(`(${terms.join('|')})`, 'gi')
   return text.replace(re, (match) => ansis.yellow(match))
-}
-
-function escapeRegExp(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
