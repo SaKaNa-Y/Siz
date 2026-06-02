@@ -29,6 +29,9 @@ importers:
       package-manager-detector:
         specifier: ^1.0.0
         version: 1.6.0
+      semver:
+        specifier: ^7.8.1
+        version: 7.8.1
     devDependencies:
       '@changesets/changelog-github':
         specifier: ^0.7.0
@@ -39,6 +42,9 @@ importers:
       '@types/node':
         specifier: ^22.10.0
         version: 22.19.19
+      '@types/semver':
+        specifier: ^7.7.1
+        version: 7.7.1
       oxfmt:
         specifier: ^0.52.0
         version: 0.52.0
@@ -986,6 +992,9 @@ packages:
 
   '@types/node@22.19.19':
     resolution: {integrity: sha512-dyh/xO2Fh5bYrfWaaqGrRQQGkNdmYw6AmaAUvYeUMNTWQtvb796ikLdmTchRmOlOiIJ1TDXfWgVx1QkUlQ6Hew==}
+
+  '@types/semver@7.7.1':
+    resolution: {integrity: sha512-FmgJfu+MOcQ370SD0ev7EI8TlCAfKYU+B4m5T3yXc1CiRN94g/SZPtsCkk506aUDtlMnFZvasDwHHUcZUEaYuA==}
 
   '@vitest/expect@3.2.4':
     resolution: {integrity: sha512-Io0yyORnB6sikFlt8QW5K7slY4OjqNX9jmJQ02QDda8lyM6B5oNgVWoSoKPac8/kgnCUzuHQKrSLtu/uOqqrig==}
@@ -2425,6 +2434,8 @@ snapshots:
   '@types/node@22.19.19':
     dependencies:
       undici-types: 6.21.0
+
+  '@types/semver@7.7.1': {}
 
   '@vitest/expect@3.2.4':
     dependencies:

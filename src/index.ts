@@ -22,9 +22,35 @@ export {
   detectPM,
   buildInstallCommand,
   buildInstallCommands,
+  buildSyncCommand,
   formatCommand,
   runInstall,
   type InstallCommand,
 } from './core/pm.ts'
+export {
+  findPackageJson,
+  loadProjectManifest,
+  collectDeps,
+  applyRangeEdits,
+  writeManifest,
+  isUpgradableSpecifier,
+  type DepType,
+  type ProjectDep,
+  type ProjectManifest,
+} from './core/project.ts'
+export {
+  buildUpgradePlan,
+  analyzeDep,
+  resolveTarget,
+  currentVersionFromRange,
+  detectRangePrefix,
+  applyPrefix,
+  fetchVersionInfo,
+  type UpgradeMode,
+  type UpgradePlan,
+  type UpgradePlanItem,
+  type DepAnalysis,
+  type VersionInfo,
+} from './core/upgrade.ts'
 export { searchPrompt, type SearchOption, type SearchPromptOptions } from './ui/search-prompt.ts'
 export { highlightKeywords } from './ui/highlight.ts'

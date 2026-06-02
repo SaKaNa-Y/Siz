@@ -68,6 +68,18 @@ export function buildInstallCommands(
   return cmds
 }
 
+/**
+ * Build the plain install/sync command (e.g. `pnpm install`) — applies the
+ * version ranges already written in package.json without adding new packages.
+ * Used by `siz upgrade`, where `add` would re-resolve to latest and clobber the
+ * minor/patch ceiling we just wrote. Pure — no side effects.
+ */
+export function buildSyncCommand(agent: Agent): InstallCommand {
+  const resolved = resolveCommand(agent, 'install', [])
+  if (!resolved) return { command: 'npm', args: ['install'] }
+  return { command: resolved.command, args: resolved.args }
+}
+
 /** Human-readable form of an install command, e.g. `pnpm add -D react`. */
 export function formatCommand(cmd: InstallCommand): string {
   return [cmd.command, ...cmd.args].join(' ')

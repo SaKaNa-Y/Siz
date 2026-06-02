@@ -55,12 +55,14 @@
     "cac": "^7.0.0",
     "fast-npm-meta": "^1.4.2",
     "fzf": "^0.5.2",
-    "package-manager-detector": "^1.0.0"
+    "package-manager-detector": "^1.0.0",
+    "semver": "^7.8.1"
   },
   "devDependencies": {
     "@changesets/changelog-github": "^0.7.0",
     "@changesets/cli": "^2.31.0",
     "@types/node": "^22.10.0",
+    "@types/semver": "^7.7.1",
     "oxfmt": "^0.52.0",
     "oxlint": "^1.67.0",
     "tsdown": "^0.15.6",

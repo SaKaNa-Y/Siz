@@ -54,9 +54,12 @@ Three layers, top to bottom: **Commands** orchestrate flow → **Core** holds lo
 
 - bare `siz [query]` → `commands/interactive.ts` (or `commands/search.ts` for `--list` / `--json`)
 - `add`, `list`/`ls`, `fav`/`unfav`, `tag`/`untag`, `rm`
+- `upgrade [level]` / `up` (alias) → `commands/upgrade.ts`; `level` is `major | minor | patch | latest` (validated in `cli.ts`, defaults to `latest`); `--dry-run` previews without writing or installing
 - `help`, `version` — thin subcommands that reuse cac's built-in `outputHelp()` / `outputVersion()`; the version is sourced from `package.json` (imported), which also backs the `--version` flag
 
 **Main data flow** (interactive search): `interactive.ts` calls `core/registry.searchPackages()`, which hits the npm registry, parses GitHub-style qualifiers via `core/query.ts`, and fuzzy-filters with `fzf`. Results render through `ui/search-prompt.ts` (live multiselect) + `ui/render.ts`. Selected packages flow into local state via `core/store.ts` mutators, and install commands are built by `core/pm.ts`.
+
+**Upgrade flow** (`siz upgrade`): `commands/upgrade.ts` loads the nearest `package.json` via `core/project.loadProjectManifest()`, batch-fetches registry versions through `core/upgrade.fetchVersionInfo()` (`fast-npm-meta`), and partitions deps with `buildUpgradePlan()` under **ceiling** semantics (`patch`→newest within `major.minor`/`~`, `minor`→newest within `major`/`^`, `major`/`latest`→newest overall; `0.x` is treated as breaking, so `minor`/`patch` never cross a `0.x` boundary). The user multiselects in a `@clack/prompts` flow, then ranges are rewritten **format-preservingly** via `core/project.applyRangeEdits()` + atomic `writeManifest()`, and `core/pm.buildSyncCommand()` / `runInstall()` apply them. Non-registry specifiers (`workspace:`, `catalog:`, npm aliases, git/file/link, URLs) and unparseable ranges are skipped, not touched.
 
 **Core modules** (`src/core/`):
 
@@ -64,13 +67,15 @@ Three layers, top to bottom: **Commands** orchestrate flow → **Core** holds lo
 - `query.ts` — parses qualifiers: `keyword:`, `author:`, `scope:`, `category:`, `tag:`
 - `store.ts` — JSON persistence in the user config dir, non-destructive migrations, and tracking/favorite/tag mutators
 - `categories.ts` — heuristic categorization (Frontend, Backend, Testing, …) from name/description/keywords
-- `pm.ts` — detect npm/pnpm/yarn/bun/deno and build install commands (incl. dev deps); uses `package-manager-detector`
+- `pm.ts` — detect npm/pnpm/yarn/bun/deno and build install commands (incl. dev deps) and the sync/install command (`buildSyncCommand`, `runInstall`) used by upgrade; uses `package-manager-detector`
 - `meta.ts` — fast version resolution via `fast-npm-meta`
+- `project.ts` — locate the nearest `package.json`, collect deps from `dependencies`/`devDependencies`, and rewrite version ranges in-place without reformatting (brace-matched block edits, atomic writes); `isUpgradableSpecifier()` filters out non-registry protocols
+- `upgrade.ts` — analyze each dep against registry versions and build an upgrade plan with ceiling semantics (`UpgradeMode`); types `DepAnalysis`, `UpgradePlan`, `VersionInfo`
 - `paths.ts` — config dir resolution (Windows `%APPDATA%\siz`, Unix `~/.config/siz`)
 - `types.ts` — shared interfaces: `TrackedPackage`, `SizData`, `SearchResult`
 
-**UI** (`src/ui/`): `render.ts` (score bars, category labels, result/tracked cards), `search-prompt.ts` (type-as-you-search multiselect), `prompts.ts` (`@clack/prompts` confirm/action menus), `highlight.ts` (keyword highlighting). Color via `ansis`.
+**UI** (`src/ui/`): `render.ts` (score bars, category labels, result/tracked cards), `search-prompt.ts` (type-as-you-search multiselect), `prompts.ts` (`@clack/prompts` confirm/action menus, package-manager picker), `upgrade-render.ts` (upgrade summary line, version deltas, option labels), `highlight.ts` (keyword highlighting). Color via `ansis`.
 
-**Library surface** — `src/index.ts` re-exports core functions (`searchPackages`, `trackPackage`, `detectPM`, `buildInstallCommand`, `listPackages`, …). Keep it in sync when core signatures change.
+**Library surface** — `src/index.ts` re-exports core functions (`searchPackages`, `trackPackage`, `detectPM`, `buildInstallCommand`, `listPackages`, the `project.ts`/`upgrade.ts` upgrade functions and types, …). Keep it in sync when core signatures change.
 
 **Data store** — persisted to `data.json` in the config dir (`%APPDATA%\siz\data.json` on Windows, `~/.config/siz/data.json` on Unix). Tests under `test/*.test.ts` mirror the core modules.
