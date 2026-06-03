@@ -6,12 +6,20 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   CURRENT_VERSION,
   addTags,
+  addToBundle,
+  getBundle,
+  listBundles,
   listPackages,
   loadData,
   migrate,
+  removeBundle,
+  removeFromBundle,
+  renameBundle,
   setFavorite,
+  touchBundle,
   trackPackage,
   untrack,
+  upsertBundle,
 } from '../src/core/store.ts'
 
 let dir: string
@@ -136,5 +144,109 @@ describe('atomic save', () => {
     const raw = readFileSync(file, 'utf8')
     expect(raw.endsWith('\n')).toBe(true)
     expect(() => JSON.parse(raw)).not.toThrow()
+  })
+})
+
+describe('v1 -> v2 migration introduces bundles non-destructively', () => {
+  it('adds an empty bundles map while preserving tracked packages', () => {
+    const v1 = {
+      version: 1,
+      packages: {
+        lodash: { name: 'lodash', addedAt: '2020-01-01T00:00:00.000Z', favorite: true, tags: [] },
+      },
+      settings: {},
+    }
+    writeFileSync(file, JSON.stringify(v1), 'utf8')
+
+    const data = loadData(file)
+    expect(data.version).toBe(CURRENT_VERSION)
+    expect(data.bundles).toEqual({})
+    expect(data.packages.lodash.favorite).toBe(true)
+  })
+
+  it('preserves existing bundles on a v2 file (round-trip)', () => {
+    const bundle = {
+      name: 'web',
+      tags: ['ui'],
+      packages: { react: { name: 'react', strategy: 'caret', depType: 'dependencies' } },
+      createdAt: '2024-01-01T00:00:00.000Z',
+    }
+    writeFileSync(
+      file,
+      JSON.stringify({ version: 2, packages: {}, bundles: { web: bundle }, settings: {} }),
+      'utf8',
+    )
+    expect(loadData(file).bundles.web).toEqual(bundle)
+  })
+
+  it('is idempotent across repeated migration', () => {
+    const once = migrate({ version: 1, packages: {}, bundles: { a: { name: 'a' } } })
+    const twice = migrate(once)
+    expect(twice.bundles).toEqual(once.bundles)
+    expect(twice.version).toBe(CURRENT_VERSION)
+  })
+})
+
+describe('bundle mutators', () => {
+  it('addToBundle creates the bundle and dedupes by name (last-write-wins)', () => {
+    addToBundle('stack', [{ name: 'react', strategy: 'caret', depType: 'dependencies' }], file)
+    addToBundle('stack', [{ name: 'react', strategy: 'tilde', depType: 'devDependencies' }], file)
+
+    const bundle = getBundle('stack', file)
+    expect(Object.keys(bundle!.packages)).toEqual(['react'])
+    expect(bundle!.packages.react.strategy).toBe('tilde')
+    expect(bundle!.packages.react.depType).toBe('devDependencies')
+  })
+
+  it('upsertBundle updates metadata without clobbering packages', () => {
+    addToBundle('stack', [{ name: 'vue', strategy: 'caret', depType: 'dependencies' }], file)
+    upsertBundle('stack', { description: 'frontend', tags: ['ui'], packageManager: 'pnpm' }, file)
+
+    const bundle = getBundle('stack', file)!
+    expect(bundle.description).toBe('frontend')
+    expect(bundle.tags).toEqual(['ui'])
+    expect(bundle.packageManager).toBe('pnpm')
+    expect(Object.keys(bundle.packages)).toEqual(['vue'])
+  })
+
+  it('removeFromBundle drops only the named entries', () => {
+    addToBundle(
+      'stack',
+      [
+        { name: 'a', strategy: 'caret', depType: 'dependencies' },
+        { name: 'b', strategy: 'caret', depType: 'dependencies' },
+      ],
+      file,
+    )
+    removeFromBundle('stack', ['a'], file)
+    expect(Object.keys(getBundle('stack', file)!.packages)).toEqual(['b'])
+  })
+
+  it('listBundles sorts by lastUsedAt desc, then name', () => {
+    upsertBundle('alpha', {}, file)
+    upsertBundle('beta', {}, file)
+    upsertBundle('gamma', {}, file)
+    touchBundle('beta', file) // most recent
+
+    const names = listBundles(file).map((b) => b.name)
+    // beta first (has lastUsedAt); the rest alphabetical.
+    expect(names[0]).toBe('beta')
+    expect(names.slice(1)).toEqual(['alpha', 'gamma'])
+  })
+
+  it('removeBundle returns true/false', () => {
+    upsertBundle('x', {}, file)
+    expect(removeBundle('x', file)).toBe(true)
+    expect(removeBundle('x', file)).toBe(false)
+  })
+
+  it('renameBundle handles ok, missing, and exists', () => {
+    upsertBundle('old', {}, file)
+    upsertBundle('taken', {}, file)
+    expect(renameBundle('missing', 'new', file)).toBe('missing')
+    expect(renameBundle('old', 'taken', file)).toBe('exists')
+    expect(renameBundle('old', 'new', file)).toBe('ok')
+    expect(getBundle('new', file)!.name).toBe('new')
+    expect(getBundle('old', file)).toBeUndefined()
   })
 })

@@ -1,12 +1,14 @@
+import type { Agent } from 'package-manager-detector'
+
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 
-import type { SizData, TrackedPackage } from './types.ts'
+import type { Bundle, BundlePackage, SizData, TrackedPackage } from './types.ts'
 
 import { getDataFile } from './paths.ts'
 
 /** Current schema version. Bump when adding a migration step below. */
-export const CURRENT_VERSION = 1
+export const CURRENT_VERSION = 2
 
 const SCHEMA_HINT = 'https://github.com/siz-cli/siz/schema.json'
 
@@ -15,12 +17,18 @@ function newPackage(name: string): TrackedPackage {
   return { name, addedAt: new Date().toISOString(), favorite: false, tags: [] }
 }
 
+/** A fresh, default-initialized bundle record. */
+function newBundle(name: string): Bundle {
+  return { name, tags: [], packages: {}, createdAt: new Date().toISOString() }
+}
+
 /** A fresh, empty data object. */
 export function emptyData(): SizData {
   return {
     $schema: SCHEMA_HINT,
     version: CURRENT_VERSION,
     packages: {},
+    bundles: {},
     settings: {},
   }
 }
@@ -40,6 +48,7 @@ export function migrate(raw: unknown): SizData {
   // Ensure the core containers exist without clobbering existing values.
   if (typeof data.version !== 'number') data.version = 0
   if (!data.packages || typeof data.packages !== 'object') data.packages = {}
+  if (!data.bundles || typeof data.bundles !== 'object') data.bundles = {}
   if (!data.settings || typeof data.settings !== 'object') data.settings = {}
 
   const packages = data.packages as Record<string, Partial<TrackedPackage>>
@@ -61,6 +70,13 @@ export function migrate(raw: unknown): SizData {
       }
     }
     data.version = 1
+  }
+
+  // --- Step: v1 -> v2 -------------------------------------------------------
+  // Introduce the `bundles` container. Non-destructive: the guard above already
+  // initialized it when missing, so older files simply gain an empty map.
+  if ((data.version as number) < 2) {
+    data.version = 2
   }
 
   // Future migrations go here, each guarded by `if (data.version < N)`.
@@ -194,5 +210,100 @@ export function listPackages(
     if (filters.tag && !p.tags.includes(filters.tag)) return false
     if (filters.category && p.category !== filters.category) return false
     return true
+  })
+}
+
+// --- Bundle mutators ---------------------------------------------------------
+
+/** Metadata that can be set/updated on a bundle without touching its packages. */
+export interface BundleMeta {
+  description?: string
+  tags?: string[]
+  packageManager?: Agent
+}
+
+/** Create or update a bundle's metadata, leaving its packages untouched. */
+export function upsertBundle(name: string, meta: BundleMeta = {}, file?: string): Bundle {
+  return withData(file, (data) => {
+    const bundle = (data.bundles[name] ??= newBundle(name))
+    if (meta.description !== undefined) bundle.description = meta.description
+    if (meta.tags !== undefined) bundle.tags = meta.tags
+    if (meta.packageManager !== undefined) bundle.packageManager = meta.packageManager
+    return bundle
+  })
+}
+
+/** Add (or overwrite) package entries in a bundle, creating it if missing. */
+export function addToBundle(name: string, entries: BundlePackage[], file?: string): Bundle {
+  return withData(file, (data) => {
+    const bundle = (data.bundles[name] ??= newBundle(name))
+    for (const entry of entries) bundle.packages[entry.name] = entry
+    return bundle
+  })
+}
+
+/** Remove package entries from a bundle. Returns undefined if the bundle is missing. */
+export function removeFromBundle(
+  name: string,
+  pkgNames: string[],
+  file?: string,
+): Bundle | undefined {
+  return withData(file, (data) => {
+    const bundle = data.bundles[name]
+    if (!bundle) return undefined
+    for (const pkg of pkgNames) delete bundle.packages[pkg]
+    return bundle
+  })
+}
+
+/** Read a single bundle by name. */
+export function getBundle(name: string, file?: string): Bundle | undefined {
+  return loadData(file ?? getDataFile()).bundles[name]
+}
+
+/** List bundles, most-recently-used first (then alphabetically). */
+export function listBundles(file?: string): Bundle[] {
+  const data = loadData(file ?? getDataFile())
+  return Object.values(data.bundles).sort((a, b) => {
+    const at = a.lastUsedAt ?? ''
+    const bt = b.lastUsedAt ?? ''
+    if (at !== bt) return at < bt ? 1 : -1
+    return a.name.localeCompare(b.name)
+  })
+}
+
+/** Delete a bundle. Returns false if it didn't exist. */
+export function removeBundle(name: string, file?: string): boolean {
+  return withData(file, (data) => {
+    if (!data.bundles[name]) return false
+    delete data.bundles[name]
+    return true
+  })
+}
+
+/** Rename a bundle. Returns 'missing' if absent, 'exists' if the target name is taken. */
+export function renameBundle(
+  oldName: string,
+  newName: string,
+  file?: string,
+): 'ok' | 'missing' | 'exists' {
+  return withData(file, (data) => {
+    const bundle = data.bundles[oldName]
+    if (!bundle) return 'missing'
+    if (data.bundles[newName]) return 'exists'
+    bundle.name = newName
+    data.bundles[newName] = bundle
+    delete data.bundles[oldName]
+    return 'ok'
+  })
+}
+
+/** Stamp a bundle's lastUsedAt with the current time. */
+export function touchBundle(name: string, file?: string): Bundle | undefined {
+  return withData(file, (data) => {
+    const bundle = data.bundles[name]
+    if (!bundle) return undefined
+    bundle.lastUsedAt = new Date().toISOString()
+    return bundle
   })
 }

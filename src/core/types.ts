@@ -1,3 +1,5 @@
+import type { Agent } from 'package-manager-detector'
+
 /** A package the user has chosen to track in Siz. */
 export interface TrackedPackage {
   /** npm package name, e.g. "lodash" or "@vue/reactivity". */
@@ -16,6 +18,42 @@ export interface TrackedPackage {
   version?: string
 }
 
+/** How a bundle package's version range is written at install time. */
+export type VersionStrategy = 'latest' | 'exact' | 'caret' | 'tilde'
+
+/**
+ * The dependency bucket a bundle package targets. A superset of project.ts's
+ * `DepType` — named distinctly to avoid a conflict, and to allow storing
+ * peer/optional even though v1 install only distinguishes prod vs dev.
+ */
+export type BundleDepType =
+  | 'dependencies'
+  | 'devDependencies'
+  | 'peerDependencies'
+  | 'optionalDependencies'
+
+/** One package entry inside a bundle. The concrete version is resolved fresh at install. */
+export interface BundlePackage {
+  name: string
+  strategy: VersionStrategy
+  depType: BundleDepType
+}
+
+/** A named, reusable collection of packages for one-click installation. */
+export interface Bundle {
+  name: string
+  description?: string
+  tags: string[]
+  /** Entries keyed by package name (dedupe-by-name, last-write-wins). */
+  packages: Record<string, BundlePackage>
+  /** Preferred package manager; seeds the install picker default. */
+  packageManager?: Agent
+  /** ISO timestamp of creation. */
+  createdAt: string
+  /** ISO timestamp of the last install; drives `bundle list` sort. */
+  lastUsedAt?: string
+}
+
 /** Persisted Siz data file shape. Stored in the user config dir. */
 export interface SizData {
   /** JSON Schema hint for editors (optional, informational). */
@@ -24,6 +62,8 @@ export interface SizData {
   version: number
   /** Tracked packages keyed by package name. */
   packages: Record<string, TrackedPackage>
+  /** Saved bundles keyed by bundle name. */
+  bundles: Record<string, Bundle>
   /** User settings (reserved for future use). */
   settings: Record<string, unknown>
   /** Preserve any unknown top-level keys across read/write. */

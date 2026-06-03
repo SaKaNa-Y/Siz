@@ -4,6 +4,8 @@ import { spawn } from 'node:child_process'
 import { resolveCommand } from 'package-manager-detector/commands'
 import { detect } from 'package-manager-detector/detect'
 
+import type { BundleDepType } from './types.ts'
+
 export interface InstallCommand {
   command: string
   args: string[]
@@ -62,6 +64,34 @@ export function buildInstallCommands(
 ): InstallCommand[] {
   const prod = selections.filter((s) => !s.dev).map((s) => s.name)
   const dev = selections.filter((s) => s.dev).map((s) => s.name)
+  const cmds: InstallCommand[] = []
+  if (prod.length) cmds.push(buildInstallCommand(agent, prod))
+  if (dev.length) cmds.push(buildInstallCommand(agent, dev, { dev: true }))
+  return cmds
+}
+
+/** A package install spec (e.g. `react@^18.2.0`) tagged with its dependency type. */
+export interface SpecSelection {
+  spec: string
+  depType: BundleDepType
+}
+
+/**
+ * Build install commands for a bundle: specs already carry their version range
+ * (managers accept `pkg@range` for `add`), so they flow through untouched.
+ * Splits devDependencies from everything else into up to two commands.
+ *
+ * NOTE: v1 has no per-manager peer/optional flags, so peer/optional install as
+ * regular dependencies. The true dep type is still stored in the bundle for a
+ * future `--save-peer`/`--save-optional` pass. Pure — no side effects.
+ */
+export function buildBundleInstallCommands(
+  agent: Agent,
+  selections: SpecSelection[],
+): InstallCommand[] {
+  const isDev = (d: BundleDepType) => d === 'devDependencies'
+  const prod = selections.filter((s) => !isDev(s.depType)).map((s) => s.spec)
+  const dev = selections.filter((s) => isDev(s.depType)).map((s) => s.spec)
   const cmds: InstallCommand[] = []
   if (prod.length) cmds.push(buildInstallCommand(agent, prod))
   if (dev.length) cmds.push(buildInstallCommand(agent, dev, { dev: true }))
