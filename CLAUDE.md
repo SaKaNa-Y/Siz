@@ -4,6 +4,52 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `siz` is a CLI for searching, favoriting, tagging and tracking npm packages. It ships both as a binary (`siz`) and as a library (importable from the package root). Package manager is **pnpm** (`pnpm@10.24.0`), Node `>=20.19.0`, ESM-only TypeScript.
 
+## CLI (`siz -h`)
+
+The command surface is defined entirely by the `cac` registrations in `src/cli.ts` — that file is the single source of truth. The top-level help (`siz -h`) currently renders as below; the `siz/<version>` line is dynamic (sourced from `package.json`), and per-command options (e.g. `siz add --help`) are listed only under that command's own help.
+
+```
+siz/0.1.2
+Smarter npm package search & management CLI — search, favorite, tag and track packages.
+
+Usage:
+  $ siz [...query]
+
+Commands:
+  [...query]                     Search npm packages by name (use qualifiers like keyword:cli)
+  search [...query]              Full-text search including package descriptions
+  add <package> [...packages]    Track package(s) manually
+  bundle <action> [arg1] [arg2]  Manage preset bundles
+  upgrade [level]                Upgrade project dependencies (level: major | minor | patch | latest)
+  list                           List tracked packages
+  fav <package>                  Mark a package as favorite
+  unfav <package>                Remove favorite mark
+  tag <package> [...tags]        Add tags to a package
+  untag <package> [...tags]      Remove tags from a package
+  rm <package>                   Untrack a package
+  help                           Show this help message
+  version                        Show the installed version
+
+Options:
+  -n, --size <n>  Number of results to fetch (default: 20)
+  --json          Output raw JSON results (requires a query)
+  --list          Print results without the interactive box (requires a query)
+  -h, --help      Display this message
+  -v, --version   Display version number
+
+Examples:
+  $ siz react form validation
+  $ siz search "state management" --list
+  $ siz add zod vitest
+  $ siz add react vue --bundle my-stack
+  $ siz add zod --strategy exact --bundle my-stack
+  $ siz bundle install my-stack
+  $ siz upgrade minor
+  $ siz list --fav --tag lightweight
+```
+
+**Rule:** whenever a command, option, flag, alias, or example is added, changed, or removed in `src/cli.ts`, update this help block (and the relevant per-command help) to match — `siz -h` is part of the public surface and must never drift from the code.
+
 ## Commands
 
 - `pnpm dev` — run the CLI in dev (`tsx src/cli.ts`)
@@ -52,8 +98,10 @@ Three layers, top to bottom: **Commands** orchestrate flow → **Core** holds lo
 
 **Entry / routing** — `src/cli.ts` uses `cac` to register subcommands and dispatch to `src/commands/*`:
 
-- bare `siz [query]` → `commands/interactive.ts` (or `commands/search.ts` for `--list` / `--json`)
-- `add`, `list`/`ls`, `fav`/`unfav`, `tag`/`untag`, `rm`
+- bare `siz [query]` → `commands/interactive.ts` (name search; or `commands/search.ts` for `--list` / `--json`); `search [query]` is the same flow over descriptions (full-text)
+- `add <package…>` → `commands/add.ts`; `-b/--bundle <name>` also records into a bundle, `-D/--dev` marks bundle entries as devDependencies, `-s/--strategy <latest|exact|caret|tilde>` (validated in `cli.ts`, default `caret`) sets the recorded version strategy
+- `bundle <action> [arg1] [arg2]` → `commands/bundle.ts`; cac matches on the leading token, so one command dispatches on `action`: `list`/`ls`, `install <name>`, `show <name>`, `rm <name>`, `rename <old> <new>`
+- `list`/`ls`, `fav`/`unfav`, `tag`/`untag`, `rm`
 - `upgrade [level]` / `up` (alias) → `commands/upgrade.ts`; `level` is `major | minor | patch | latest` (validated in `cli.ts`, defaults to `latest`); `--dry-run` previews without writing or installing
 - `help`, `version` — thin subcommands that reuse cac's built-in `outputHelp()` / `outputVersion()`; the version is sourced from `package.json` (imported), which also backs the `--version` flag
 

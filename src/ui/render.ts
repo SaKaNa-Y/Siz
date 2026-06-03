@@ -25,7 +25,10 @@ export function renderSearchResult(
   state: { tracked?: boolean; favorite?: boolean; showDescription?: boolean } = {},
 ): string {
   const { showDescription = true } = state
-  const marks = [state.favorite ? ansis.red('❤') : '', state.tracked ? ansis.cyan('• tracked') : '']
+  const marks = [
+    state.favorite ? ansis.red('fav') : '',
+    state.tracked ? ansis.cyan('• tracked') : '',
+  ]
     .filter(Boolean)
     .join(' ')
 
@@ -50,10 +53,10 @@ export function renderSearchResult(
 
 /** Render a tracked package as a compact one-liner for `siz list`. */
 export function renderTrackedLine(p: TrackedPackage): string {
-  const heart = p.favorite ? ansis.red('❤') : ' '
+  const mark = p.favorite ? ansis.red('fav') : '   '
   const name = ansis.bold(p.name)
   const version = p.version ? ansis.dim(` v${p.version}`) : ''
   const category = p.category ? ` ${ansis.magenta(`[${p.category}]`)}` : ''
   const tags = p.tags.length ? `  ${p.tags.map((t) => ansis.yellow(`#${t}`)).join(' ')}` : ''
-  return `${heart} ${name}${version}${category}${tags}`
+  return `${mark} ${name}${version}${category}${tags}`
 }

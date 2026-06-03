@@ -64,4 +64,23 @@ describe('resolveBundleInstall', () => {
     expect(plan.items[0]).toMatchObject({ name: 'ghost', spec: 'ghost', missing: true })
     expect(plan.missing).toEqual(['ghost'])
   })
+
+  it('uses a pinned version verbatim without resolving from the registry', async () => {
+    const { fetchVersionInfo } = await import('../src/core/upgrade.ts')
+    vi.mocked(fetchVersionInfo).mockClear()
+
+    const bundle = makeBundle({
+      locked: { strategy: 'exact', depType: 'dependencies', version: '1.4.2' },
+    })
+    const plan = await resolveBundleInstall(bundle)
+
+    expect(plan.items[0]).toMatchObject({
+      name: 'locked',
+      spec: 'locked@1.4.2',
+      resolved: '1.4.2',
+      missing: false,
+    })
+    // The pinned entry must not trigger a registry lookup.
+    expect(vi.mocked(fetchVersionInfo)).toHaveBeenCalledWith([])
+  })
 })

@@ -3,6 +3,7 @@ import ansis from 'ansis'
 import { cac } from 'cac'
 
 import type { SearchMode } from './core/registry.ts'
+import type { VersionStrategy } from './core/types.ts'
 import type { UpgradeMode } from './core/upgrade.ts'
 
 import packageJson from '../package.json' with { type: 'json' }
@@ -52,13 +53,32 @@ cli
   .option('--list', 'Print results without the interactive box (requires a query)')
   .action(searchAction('description'))
 
+const ADD_STRATEGIES = ['latest', 'exact', 'caret', 'tilde'] as const
+
 cli
   .command('add <package> [...packages]', 'Track package(s) manually')
   .option('-b, --bundle <name>', 'Also record packages into a named bundle')
   .option('-D, --dev', 'Record bundle entries as devDependencies')
-  .action(async (pkg: string, packages: string[], opts: { bundle?: string; dev?: boolean }) => {
-    await runAdd([pkg, ...packages], { bundle: opts.bundle, dev: opts.dev })
-  })
+  .option(
+    '-s, --strategy <strategy>',
+    'Version strategy for bundle entries: latest | exact | caret | tilde',
+    { default: 'caret' },
+  )
+  .action(
+    async (
+      pkg: string,
+      packages: string[],
+      opts: { bundle?: string; dev?: boolean; strategy?: string },
+    ) => {
+      const strategy = (opts.strategy ?? 'caret') as VersionStrategy
+      if (!ADD_STRATEGIES.includes(strategy)) {
+        throw new Error(
+          `Unknown version strategy "${strategy}". Use: latest | exact | caret | tilde`,
+        )
+      }
+      await runAdd([pkg, ...packages], { bundle: opts.bundle, dev: opts.dev, strategy })
+    },
+  )
 
 // cac matches commands by a single leading token, so the bundle subcommands
 // live under one command that dispatches on `action` (e.g. `siz bundle list`).
@@ -146,6 +166,7 @@ const EXAMPLES = [
   'siz search "state management" --list',
   'siz add zod vitest',
   'siz add react vue --bundle my-stack',
+  'siz add zod --strategy exact --bundle my-stack',
   'siz bundle install my-stack',
   'siz upgrade minor',
   'siz list --fav --tag lightweight',
