@@ -14,8 +14,22 @@ export {
   setCategory,
   untrack,
   listPackages,
+  upsertBundle,
+  addToBundle,
+  removeFromBundle,
+  getBundle,
+  listBundles,
+  removeBundle,
+  renameBundle,
+  touchBundle,
+  type BundleMeta,
   CURRENT_VERSION,
 } from './core/store.ts'
+export {
+  resolveBundleInstall,
+  type BundleInstallItem,
+  type BundleInstallPlan,
+} from './core/bundle.ts'
 export { resolveLatest } from './core/meta.ts'
 export { getConfigDir, getDataFile } from './core/paths.ts'
 export {
@@ -23,9 +37,11 @@ export {
   buildInstallCommand,
   buildInstallCommands,
   buildSyncCommand,
+  buildBundleInstallCommands,
   formatCommand,
   runInstall,
   type InstallCommand,
+  type SpecSelection,
 } from './core/pm.ts'
 export {
   findPackageJson,

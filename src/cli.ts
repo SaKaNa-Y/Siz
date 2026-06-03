@@ -7,6 +7,13 @@ import type { UpgradeMode } from './core/upgrade.ts'
 
 import packageJson from '../package.json' with { type: 'json' }
 import { runAdd } from './commands/add.ts'
+import {
+  runBundleInstall,
+  runBundleList,
+  runBundleRemove,
+  runBundleRename,
+  runBundleShow,
+} from './commands/bundle.ts'
 import { runFavorite } from './commands/favorite.ts'
 import { runInteractive } from './commands/interactive.ts'
 import { runList } from './commands/list.ts'
@@ -47,8 +54,43 @@ cli
 
 cli
   .command('add <package> [...packages]', 'Track package(s) manually')
-  .action(async (pkg: string, packages: string[]) => {
-    await runAdd([pkg, ...packages])
+  .option('-b, --bundle <name>', 'Also record packages into a named bundle')
+  .option('-D, --dev', 'Record bundle entries as devDependencies')
+  .action(async (pkg: string, packages: string[], opts: { bundle?: string; dev?: boolean }) => {
+    await runAdd([pkg, ...packages], { bundle: opts.bundle, dev: opts.dev })
+  })
+
+// cac matches commands by a single leading token, so the bundle subcommands
+// live under one command that dispatches on `action` (e.g. `siz bundle list`).
+const BUNDLE_USAGE = 'Use: list | install <name> | show <name> | rm <name> | rename <old> <new>'
+
+cli
+  .command('bundle <action> [arg1] [arg2]', 'Manage preset bundles')
+  .action(async (action: string, arg1: string | undefined, arg2: string | undefined) => {
+    switch (action) {
+      case 'list':
+      case 'ls':
+        runBundleList()
+        return
+      case 'install':
+        if (!arg1) throw new Error('Usage: siz bundle install <name>')
+        await runBundleInstall(arg1)
+        return
+      case 'show':
+        if (!arg1) throw new Error('Usage: siz bundle show <name>')
+        runBundleShow(arg1)
+        return
+      case 'rm':
+        if (!arg1) throw new Error('Usage: siz bundle rm <name>')
+        await runBundleRemove(arg1)
+        return
+      case 'rename':
+        if (!arg1 || !arg2) throw new Error('Usage: siz bundle rename <old> <new>')
+        runBundleRename(arg1, arg2)
+        return
+      default:
+        throw new Error(`Unknown bundle action "${action}". ${BUNDLE_USAGE}`)
+    }
   })
 
 const UPGRADE_LEVELS = ['major', 'minor', 'patch', 'latest'] as const
@@ -103,6 +145,8 @@ const EXAMPLES = [
   'siz react form validation',
   'siz search "state management" --list',
   'siz add zod vitest',
+  'siz add react vue --bundle my-stack',
+  'siz bundle install my-stack',
   'siz upgrade minor',
   'siz list --fav --tag lightweight',
 ]

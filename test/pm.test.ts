@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
-import { buildInstallCommand, buildInstallCommands, formatCommand } from '../src/core/pm.ts'
+import {
+  buildBundleInstallCommands,
+  buildInstallCommand,
+  buildInstallCommands,
+  formatCommand,
+} from '../src/core/pm.ts'
 
 describe('buildInstallCommand', () => {
   it('builds npm install (deps)', () => {
@@ -69,5 +74,35 @@ describe('buildInstallCommands', () => {
 
   it('returns no commands for an empty selection', () => {
     expect(buildInstallCommands('npm', [])).toEqual([])
+  })
+})
+
+describe('buildBundleInstallCommands', () => {
+  it('passes version specs through and groups prod into one command', () => {
+    const cmds = buildBundleInstallCommands('pnpm', [
+      { spec: 'react@^18.2.0', depType: 'dependencies' },
+      { spec: 'vue@~3.4.0', depType: 'dependencies' },
+    ])
+    expect(cmds.map(formatCommand)).toEqual(['pnpm add react@^18.2.0 vue@~3.4.0'])
+  })
+
+  it('splits dev specs into a separate -D command', () => {
+    const cmds = buildBundleInstallCommands('pnpm', [
+      { spec: 'react@^18.2.0', depType: 'dependencies' },
+      { spec: 'vitest@^2.0.0', depType: 'devDependencies' },
+    ])
+    expect(cmds.map(formatCommand)).toEqual(['pnpm add react@^18.2.0', 'pnpm add -D vitest@^2.0.0'])
+  })
+
+  it('treats peer/optional deps as regular dependencies in v1', () => {
+    const cmds = buildBundleInstallCommands('npm', [
+      { spec: 'react@^18.2.0', depType: 'peerDependencies' },
+      { spec: 'fsevents@^2.3.0', depType: 'optionalDependencies' },
+    ])
+    expect(cmds.map(formatCommand)).toEqual(['npm i react@^18.2.0 fsevents@^2.3.0'])
+  })
+
+  it('returns no commands for an empty selection', () => {
+    expect(buildBundleInstallCommands('npm', [])).toEqual([])
   })
 })
