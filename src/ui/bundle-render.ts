@@ -1,7 +1,8 @@
 import ansis from 'ansis'
 
-import type { BundleInstallItem } from '../core/bundle.ts'
 import type { Bundle, BundlePackage, VersionStrategy } from '../core/types.ts'
+
+import { type BundleInstallItem, isPinned } from '../core/bundle.ts'
 
 /** Short symbol for a version strategy, e.g. `^` for caret. */
 export function strategyLabel(strategy: VersionStrategy): string {
@@ -31,10 +32,13 @@ export function depTypeLabel(depType: BundlePackage['depType']): string {
   }
 }
 
-/** One package line for `bundle show`, e.g. `  react  ^  [dep]`. */
+/** One package line for `bundle show`, e.g. `  react  =18.2.0  [dep]` or `  react  ^  [dep]`. */
 export function renderBundlePackageLine(entry: BundlePackage): string {
-  const strat = ansis.cyan(strategyLabel(entry.strategy))
-  return `  ${ansis.bold(entry.name)}  ${strat} ${depTypeLabel(entry.depType)}`
+  // Pinned entries show the locked version (`=18.2.0`); others show the range symbol.
+  const range = isPinned(entry)
+    ? ansis.cyan(`=${entry.version}`)
+    : ansis.cyan(strategyLabel(entry.strategy))
+  return `  ${ansis.bold(entry.name)}  ${range} ${depTypeLabel(entry.depType)}`
 }
 
 /** Format an ISO timestamp as a short date, or `never`. */

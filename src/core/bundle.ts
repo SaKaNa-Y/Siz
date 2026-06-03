@@ -1,4 +1,4 @@
-import type { Bundle, BundleDepType, VersionStrategy } from './types.ts'
+import type { Bundle, BundleDepType, BundlePackage, VersionStrategy } from './types.ts'
 
 import { applyPrefix, fetchVersionInfo, type RangePrefix } from './upgrade.ts'
 
@@ -29,6 +29,11 @@ function strategyPrefix(strategy: VersionStrategy): RangePrefix {
   return '' // exact (and latest, handled separately)
 }
 
+/** A pinned entry carries its own snapshot version and skips registry resolution. */
+export function isPinned(entry: BundlePackage): entry is BundlePackage & { version: string } {
+  return entry.strategy === 'exact' && entry.version != null
+}
+
 /** Build the install spec for one package under its strategy. */
 function specFor(name: string, strategy: VersionStrategy, version: string | null): string {
   // `latest` defers to the package manager; a bare name lets it resolve + write
@@ -45,18 +50,21 @@ function specFor(name: string, strategy: VersionStrategy, version: string | null
  */
 export async function resolveBundleInstall(bundle: Bundle): Promise<BundleInstallPlan> {
   const entries = Object.values(bundle.packages)
-  const versions = await fetchVersionInfo(entries.map((e) => e.name))
+  // Pinned entries carry their own version — only fetch the rest.
+  const versions = await fetchVersionInfo(entries.filter((e) => !isPinned(e)).map((e) => e.name))
 
   const items: BundleInstallItem[] = entries.map((e) => {
-    const info = versions.get(e.name)
-    const resolved = info?.exists ? info.latest : null
+    const pinned = isPinned(e)
+    const info = pinned ? undefined : versions.get(e.name)
+    // Pinned → its snapshot; otherwise the registry's current latest.
+    const resolved = pinned ? e.version : info?.exists ? info.latest : null
     return {
       name: e.name,
       depType: e.depType,
       strategy: e.strategy,
       resolved,
       spec: specFor(e.name, e.strategy, resolved),
-      missing: !info?.exists,
+      missing: pinned ? false : !info?.exists,
     }
   })
 

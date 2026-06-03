@@ -2,7 +2,7 @@ import ansis from 'ansis'
 import { exec } from 'node:child_process'
 import process from 'node:process'
 
-import type { SearchResult, TrackedPackage } from '../core/types.ts'
+import type { BundleDepType, BundlePackage, SearchResult, TrackedPackage } from '../core/types.ts'
 
 import { normalizeCategory, suggestCategory } from '../core/categories.ts'
 import { buildInstallCommands, detectPM, formatCommand, runInstall } from '../core/pm.ts'
@@ -10,13 +10,20 @@ import { parseQuery } from '../core/query.ts'
 import { type SearchMode, searchPackages } from '../core/registry.ts'
 import {
   addTags,
+  addToBundle,
   listPackages,
   setFavorite,
   sortByFavoriteThenName,
   trackPackage,
 } from '../core/store.ts'
 import { highlightKeywords } from '../ui/highlight.ts'
-import { clack, ensure, pickPackageManager, pickSetAction } from '../ui/prompts.ts'
+import {
+  clack,
+  ensure,
+  pickOrCreateBundle,
+  pickPackageManager,
+  pickSetAction,
+} from '../ui/prompts.ts'
 import { categoryLabel } from '../ui/render.ts'
 import { searchPrompt, type SearchOption } from '../ui/search-prompt.ts'
 
@@ -228,7 +235,7 @@ async function runSetAction(selections: Selection[]): Promise<void> {
         trackFromSearch(name)
         setFavorite(name, true)
       }
-      clack.log.success(`Favorited ${names.join(', ')} ❤`)
+      clack.log.success(`Favorited ${names.join(', ')}`)
       clack.outro('Done.')
       return
     }
@@ -253,6 +260,37 @@ async function runSetAction(selections: Selection[]): Promise<void> {
         if (tags.length) addTags(name, tags)
       }
       clack.log.success(`Tagged ${names.join(', ')}: ${tags.map((t) => `#${t}`).join(' ')}`)
+      clack.outro('Done.')
+      return
+    }
+
+    case 'bundle': {
+      const target = await pickOrCreateBundle()
+      if (!target) {
+        clack.outro('Done.')
+        return
+      }
+      // One version policy for the whole selection: pin the exact version seen
+      // during search, or track the latest with a caret range.
+      const lock = ensure(
+        await clack.select<'exact' | 'caret'>({
+          message: 'Version policy',
+          options: [
+            { value: 'caret', label: 'Track latest (caret ^)', hint: 'resolve fresh on install' },
+            { value: 'exact', label: 'Lock exact version', hint: 'pin the version you saw' },
+          ],
+        }),
+      )
+      const entries: BundlePackage[] = selections.map((s) => {
+        const depType: BundleDepType = s.dev ? 'devDependencies' : 'dependencies'
+        if (lock === 'exact') {
+          return { name: s.name, strategy: 'exact', depType, version: versionCache.get(s.name) }
+        }
+        return { name: s.name, strategy: 'caret', depType }
+      })
+      addToBundle(target, entries)
+      for (const name of names) trackFromSearch(name)
+      clack.log.success(`Added ${names.join(', ')} to bundle ${ansis.bold(target)}`)
       clack.outro('Done.')
       return
     }
@@ -288,7 +326,7 @@ async function runBrowseTracked(filters: { tag?: string; category?: string } = {
       required: false,
       options: tracked.map((pkg) => ({
         value: pkg.name,
-        label: `${pkg.favorite ? '❤ ' : ''}${pkg.name}`,
+        label: `${pkg.favorite ? `${ansis.red('fav')} ` : ''}${pkg.name}`,
         hint:
           [pkg.category, ...pkg.tags.map((t) => `#${t}`)].filter(Boolean).join(' ') || undefined,
       })),

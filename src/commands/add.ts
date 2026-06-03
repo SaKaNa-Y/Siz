@@ -5,8 +5,8 @@ import type { BundleDepType, VersionStrategy } from '../core/types.ts'
 
 import { suggestCategory } from '../core/categories.ts'
 import { resolveLatest } from '../core/meta.ts'
-import { addToBundle, listBundles, trackPackage } from '../core/store.ts'
-import { clack, ensure } from '../ui/prompts.ts'
+import { addToBundle, trackPackage } from '../core/store.ts'
+import { pickOrCreateBundle } from '../ui/prompts.ts'
 
 export interface AddOptions {
   /** Also record the packages into this bundle (created if missing). */
@@ -51,7 +51,7 @@ async function recordIntoBundle(names: string[], opts: AddOptions): Promise<void
   // Without an explicit flag, offer an interactive picker only on a TTY so
   // scripted use (`siz add x`) stays non-interactive.
   if (!target && process.stdout.isTTY) {
-    target = await promptForBundle()
+    target = await pickOrCreateBundle()
   }
   if (!target) return
 
@@ -64,27 +64,4 @@ async function recordIntoBundle(names: string[], opts: AddOptions): Promise<void
   console.log(
     `${ansis.green('+')} added ${names.length} package${names.length === 1 ? '' : 's'} to bundle ${ansis.bold(target)}`,
   )
-}
-
-/** Interactive picker: skip, create a new bundle, or pick an existing one. */
-async function promptForBundle(): Promise<string | undefined> {
-  const existing = listBundles()
-  type Choice = 'skip' | 'new' | (string & {})
-  const options: { value: Choice; label: string; hint?: string }[] = [
-    { value: 'skip', label: 'Skip', hint: "don't add to a bundle" },
-    { value: 'new', label: '＋ New bundle' },
-    ...existing.map((b) => ({ value: b.name, label: b.name })),
-  ]
-
-  const choice = ensure(await clack.select<Choice>({ message: 'Add these to a bundle?', options }))
-  if (choice === 'skip') return undefined
-  if (choice !== 'new') return choice
-
-  const name = ensure(
-    await clack.text({
-      message: 'Bundle name',
-      validate: (v) => (v?.trim() ? undefined : 'Name cannot be empty'),
-    }),
-  )
-  return name.trim()
 }

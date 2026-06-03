@@ -32,11 +32,17 @@ export type BundleDepType =
   | 'peerDependencies'
   | 'optionalDependencies'
 
-/** One package entry inside a bundle. The concrete version is resolved fresh at install. */
+/**
+ * One package entry inside a bundle. For most strategies the concrete version
+ * is resolved fresh at install; when `strategy === 'exact'` the `version` below
+ * pins the snapshot taken when the package was added.
+ */
 export interface BundlePackage {
   name: string
   strategy: VersionStrategy
   depType: BundleDepType
+  /** Pinned version, set when `strategy === 'exact'` from a snapshot at add time. */
+  version?: string
 }
 
 /** A named, reusable collection of packages for one-click installation. */
