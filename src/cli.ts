@@ -20,7 +20,6 @@ import { runInteractive } from './commands/interactive.ts'
 import { runList } from './commands/list.ts'
 import { runRemove } from './commands/remove.ts'
 import { runSearchPrint } from './commands/search.ts'
-import { runTag, runUntag } from './commands/tag.ts'
 import { runUpgrade } from './commands/upgrade.ts'
 
 const cli = cac('siz')
@@ -134,11 +133,10 @@ cli
 cli
   .command('list', 'List tracked packages')
   .alias('ls')
-  .option('-t, --tag <tag>', 'Filter by tag')
   .option('-c, --category <category>', 'Filter by category')
   .option('-f, --fav', 'Show favorites only')
-  .action((opts: { tag?: string; category?: string; fav?: boolean }) => {
-    runList({ tag: opts.tag, category: opts.category, fav: opts.fav })
+  .action((opts: { category?: string; fav?: boolean }) => {
+    runList({ category: opts.category, fav: opts.fav })
   })
 
 cli
@@ -147,14 +145,6 @@ cli
 cli
   .command('unfav <package>', 'Remove favorite mark')
   .action((pkg: string) => runFavorite(pkg, false))
-
-cli
-  .command('tag <package> [...tags]', 'Add tags to a package')
-  .action((pkg: string, tags: string[]) => runTag(pkg, tags))
-
-cli
-  .command('untag <package> [...tags]', 'Remove tags from a package')
-  .action((pkg: string, tags: string[]) => runUntag(pkg, tags))
 
 cli.command('rm <package>', 'Untrack a package').action((pkg: string) => runRemove(pkg))
 
@@ -170,7 +160,7 @@ const EXAMPLES = [
   'siz add zod --strategy exact --bundle my-stack',
   'siz bundle install my-stack',
   'siz upgrade minor',
-  'siz list --fav --tag lightweight',
+  'siz list --fav',
 ]
 
 cli.help((sections) => {

@@ -9,7 +9,6 @@ import { buildInstallCommands, detectPM, formatCommand, runInstall } from '../co
 import { parseQuery } from '../core/query.ts'
 import { type SearchMode, searchPackages } from '../core/registry.ts'
 import {
-  addTags,
   addToBundle,
   listPackages,
   setFavorite,
@@ -55,16 +54,11 @@ function toSearchOption(
   mode: SearchMode,
   tracked?: TrackedPackage,
 ): SearchOption {
-  // Category/tag prefix: stored category + #tags for tracked packages,
-  // otherwise the heuristic category guess.
-  const prefix = tracked
-    ? [
-        tracked.category ? ansis.magenta(`[${tracked.category}]`) : '',
-        ...tracked.tags.map((t) => ansis.yellow(`#${t}`)),
-      ]
-        .filter(Boolean)
-        .join(' ')
-    : categoryLabel(pkg)
+  // Category prefix: stored category for tracked packages, otherwise the
+  // heuristic category guess.
+  let prefix: string
+  if (!tracked) prefix = categoryLabel(pkg)
+  else prefix = tracked.category ? ansis.magenta(`[${tracked.category}]`) : ''
 
   const name = `${highlightKeywords(pkg.name, input)} ${ansis.blue(`v${pkg.version}`)}`
   const label = prefix ? `${prefix} ${name}` : name
@@ -213,6 +207,8 @@ async function runSetAction(selections: Selection[]): Promise<void> {
       }
       clack.log.step(`Installing with ${ansis.bold(agent)}`)
       for (const cmd of cmds) {
+        // Run installs sequentially and bail on the first failure (no parallelism).
+        // eslint-disable-next-line no-await-in-loop
         const code = await runInstall(cmd)
         if (code !== 0) {
           clack.log.error(`Install exited with code ${code}`)
@@ -247,23 +243,6 @@ async function runSetAction(selections: Selection[]): Promise<void> {
       return
     }
 
-    case 'tag': {
-      const input = ensure(
-        await clack.text({
-          message: 'Tags (space or comma separated)',
-          placeholder: 'lightweight production',
-        }),
-      )
-      const tags = input.split(/[\s,]+/).filter(Boolean)
-      for (const name of names) {
-        trackFromSearch(name)
-        if (tags.length) addTags(name, tags)
-      }
-      clack.log.success(`Tagged ${names.join(', ')}: ${tags.map((t) => `#${t}`).join(' ')}`)
-      clack.outro('Done.')
-      return
-    }
-
     case 'bundle': {
       const target = await pickOrCreateBundle()
       if (!target) {
@@ -294,23 +273,15 @@ async function runSetAction(selections: Selection[]): Promise<void> {
       clack.outro('Done.')
       return
     }
-
-    case 'copy': {
-      const agent = await pickPackageManager(await detectPM())
-      const cmds = buildInstallCommands(agent, selections)
-      console.log(`\n${cmds.map((c) => ansis.cyan(formatCommand(c))).join('\n')}\n`)
-      clack.outro('Done.')
-      return
-    }
   }
 }
 
 /** Empty-input path: pick from the user's tracked/favorited packages. */
-async function runBrowseTracked(filters: { tag?: string; category?: string } = {}): Promise<void> {
+async function runBrowseTracked(filters: { category?: string } = {}): Promise<void> {
   const tracked = sortByFavoriteThenName(listPackages(filters))
 
   if (tracked.length === 0) {
-    const filtered = filters.tag || filters.category
+    const filtered = filters.category
     clack.log.info(
       filtered
         ? 'No tracked packages match that filter.'
@@ -327,8 +298,7 @@ async function runBrowseTracked(filters: { tag?: string; category?: string } = {
       options: tracked.map((pkg) => ({
         value: pkg.name,
         label: `${pkg.favorite ? `${ansis.red('fav')} ` : ''}${pkg.name}`,
-        hint:
-          [pkg.category, ...pkg.tags.map((t) => `#${t}`)].filter(Boolean).join(' ') || undefined,
+        hint: pkg.category || undefined,
       })),
     }),
   )
@@ -350,11 +320,10 @@ export async function runInteractive(seedQuery?: string, mode: SearchMode = 'nam
       clack.cancel('Cancelled.')
       return
     case 'empty': {
-      // Carry tag/category qualifiers from the seed into the tracked-list view,
-      // which filters against the user's own tags/categories.
+      // Carry the category qualifier from the seed into the tracked-list view,
+      // which filters against the user's own categories.
       const { qualifiers } = parseQuery(seedQuery ?? '')
       await runBrowseTracked({
-        tag: qualifiers.tag?.[0],
         category: qualifiers.category ? normalizeCategory(qualifiers.category) : undefined,
       })
       return

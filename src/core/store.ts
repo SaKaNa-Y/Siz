@@ -14,7 +14,7 @@ const SCHEMA_HINT = 'https://github.com/siz-cli/siz/schema.json'
 
 /** A fresh, default-initialized package record. */
 function newPackage(name: string): TrackedPackage {
-  return { name, addedAt: new Date().toISOString(), favorite: false, tags: [] }
+  return { name, addedAt: new Date().toISOString(), favorite: false }
 }
 
 /** A fresh, default-initialized bundle record. */
@@ -37,7 +37,7 @@ export function emptyData(): SizData {
  * Migrate raw on-disk data up to CURRENT_VERSION.
  *
  * IMPORTANT: every step is *non-destructive*. We only add or transform fields
- * and never drop tracked packages, favorites, tags, or unknown keys. This is
+ * and never drop tracked packages, favorites, or unknown keys. This is
  * what guarantees user data survives Siz upgrades.
  */
 export function migrate(raw: unknown): SizData {
@@ -66,7 +66,6 @@ export function migrate(raw: unknown): SizData {
         name: p.name ?? name,
         addedAt: typeof p.addedAt === 'string' ? p.addedAt : new Date(0).toISOString(),
         favorite: typeof p.favorite === 'boolean' ? p.favorite : false,
-        tags: Array.isArray(p.tags) ? p.tags : [],
       }
     }
     data.version = 1
@@ -98,7 +97,9 @@ export function loadData(file: string = getDataFile()): SizData {
     const code = (err as NodeJS.ErrnoException).code
     if (code === 'ENOENT') return emptyData()
     // Corrupt/unreadable JSON: do not blow away the file — surface the error.
-    throw new Error(`Failed to read Siz data at ${file}: ${(err as Error).message}`)
+    throw new Error(`Failed to read Siz data at ${file}: ${(err as Error).message}`, {
+      cause: err,
+    })
   }
   return migrate(raw)
 }
@@ -129,7 +130,7 @@ export function trackPackage(
   return withData(file, (data) => {
     const existing = data.packages[pkg.name]
     if (existing) {
-      // Update version/category without discarding favorites/tags.
+      // Update version/category without discarding favorites.
       if (pkg.version) existing.version = pkg.version
       if (pkg.category && !existing.category) existing.category = pkg.category
       return existing
@@ -152,30 +153,6 @@ export function setFavorite(name: string, favorite: boolean, file?: string): Tra
   })
 }
 
-export function addTags(name: string, tags: string[], file?: string): TrackedPackage {
-  return withData(file, (data) => {
-    const pkg = (data.packages[name] ??= newPackage(name))
-    for (const t of tags) {
-      const tag = t.trim()
-      if (tag && !pkg.tags.includes(tag)) pkg.tags.push(tag)
-    }
-    return pkg
-  })
-}
-
-export function removeTags(
-  name: string,
-  tags: string[],
-  file?: string,
-): TrackedPackage | undefined {
-  return withData(file, (data) => {
-    const pkg = data.packages[name]
-    if (!pkg) return undefined
-    pkg.tags = pkg.tags.filter((t) => !tags.includes(t))
-    return pkg
-  })
-}
-
 export function setCategory(name: string, category: string, file?: string): TrackedPackage {
   return withData(file, (data) => {
     const pkg = (data.packages[name] ??= newPackage(name))
@@ -194,20 +171,19 @@ export function untrack(name: string, file?: string): boolean {
 
 /** Sort tracked packages favorites-first, then alphabetically by name. */
 export function sortByFavoriteThenName(pkgs: TrackedPackage[]): TrackedPackage[] {
-  return pkgs.sort((a, b) =>
+  return pkgs.toSorted((a, b) =>
     a.favorite !== b.favorite ? (a.favorite ? -1 : 1) : a.name.localeCompare(b.name),
   )
 }
 
 /** List tracked packages with optional filters. */
 export function listPackages(
-  filters: { tag?: string; category?: string; favorite?: boolean } = {},
+  filters: { category?: string; favorite?: boolean } = {},
   file?: string,
 ): TrackedPackage[] {
   const data = loadData(file ?? getDataFile())
   return Object.values(data.packages).filter((p) => {
     if (filters.favorite && !p.favorite) return false
-    if (filters.tag && !p.tags.includes(filters.tag)) return false
     if (filters.category && p.category !== filters.category) return false
     return true
   })
@@ -264,7 +240,7 @@ export function getBundle(name: string, file?: string): Bundle | undefined {
 /** List bundles, most-recently-used first (then alphabetically). */
 export function listBundles(file?: string): Bundle[] {
   const data = loadData(file ?? getDataFile())
-  return Object.values(data.bundles).sort((a, b) => {
+  return Object.values(data.bundles).toSorted((a, b) => {
     const at = a.lastUsedAt ?? ''
     const bt = b.lastUsedAt ?? ''
     if (at !== bt) return at < bt ? 1 : -1

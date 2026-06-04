@@ -129,22 +129,23 @@ describe('filterByCategory', () => {
   })
 })
 
+/** Stub global fetch with a registry response containing the given package names. */
+function mockFetch(names: string[]) {
+  const body = {
+    objects: names.map((name) => ({
+      package: { name, version: '1.0.0', description: `${name} desc` },
+    })),
+  }
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => ({ ok: true, json: async () => body }) as unknown as Response),
+  )
+}
+
 describe('searchPackages', () => {
   afterEach(() => {
     vi.restoreAllMocks()
   })
-
-  function mockFetch(names: string[]) {
-    const body = {
-      objects: names.map((name) => ({
-        package: { name, version: '1.0.0', description: `${name} desc` },
-      })),
-    }
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => ({ ok: true, json: async () => body }) as unknown as Response),
-    )
-  }
 
   it('name mode restricts results to name matches', async () => {
     mockFetch(['react', 'preact', 'vue'])

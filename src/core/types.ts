@@ -8,8 +8,6 @@ export interface TrackedPackage {
   addedAt: string
   /** Whether the user marked it as a favorite. */
   favorite: boolean
-  /** User-defined tags, e.g. ["lightweight", "production"]. */
-  tags: string[]
   /** Optional category (see core/categories.ts). */
   category?: string
   /** Optional free-form note. */

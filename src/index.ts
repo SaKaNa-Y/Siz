@@ -9,8 +9,6 @@ export {
   emptyData,
   trackPackage,
   setFavorite,
-  addTags,
-  removeTags,
   setCategory,
   untrack,
   listPackages,

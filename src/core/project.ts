@@ -82,7 +82,7 @@ export function loadManifestAt(path: string): ProjectManifest {
   try {
     data = JSON.parse(raw) as Record<string, unknown>
   } catch (err) {
-    throw new Error(`Failed to parse ${path}: ${(err as Error).message}`)
+    throw new Error(`Failed to parse ${path}: ${(err as Error).message}`, { cause: err })
   }
   return { path, raw, data, deps: collectDeps(data) }
 }
@@ -129,7 +129,7 @@ export async function discoverManifests(
   })
   // tinyglobby yields POSIX-style paths even on Windows; normalize to native
   // separators so results match findPackageJson()/loadProjectManifest().
-  const paths = matches.map((p) => normalize(p)).sort((a, b) => a.localeCompare(b))
+  const paths = matches.map((p) => normalize(p)).toSorted((a, b) => a.localeCompare(b))
   return paths.map(loadManifestAt)
 }
 

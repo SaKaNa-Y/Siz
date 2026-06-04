@@ -13,7 +13,7 @@ export function ensure<T>(value: T | symbol): T {
   return value as T
 }
 
-export type SetAction = 'install' | 'favorite' | 'track' | 'tag' | 'bundle' | 'copy' | 'cancel'
+export type SetAction = 'install' | 'favorite' | 'track' | 'bundle' | 'cancel'
 
 /** Action menu shown after one or more packages are selected. */
 export async function pickSetAction(names: string[]): Promise<SetAction> {
@@ -25,9 +25,7 @@ export async function pickSetAction(names: string[]): Promise<SetAction> {
         { value: 'install', label: 'Install', hint: 'run your package manager' },
         { value: 'favorite', label: 'Favorite' },
         { value: 'track', label: 'Track (add to list)' },
-        { value: 'tag', label: 'Add tags' },
         { value: 'bundle', label: 'Add to bundle', hint: 'save to a reusable set' },
-        { value: 'copy', label: 'Show install command' },
         { value: 'cancel', label: 'Cancel' },
       ],
     }),

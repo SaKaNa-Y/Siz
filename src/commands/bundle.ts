@@ -170,6 +170,8 @@ export async function runBundleInstall(
   }
 
   for (const cmd of cmds) {
+    // Run installs sequentially and bail on the first failure (no parallelism).
+    // eslint-disable-next-line no-await-in-loop
     const code = await runInstall(cmd, cwd)
     if (code !== 0) {
       clack.log.error(`Install exited with code ${code}`)
