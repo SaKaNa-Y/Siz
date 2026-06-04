@@ -85,11 +85,12 @@ export interface SpecSelection {
  * regular dependencies. The true dep type is still stored in the bundle for a
  * future `--save-peer`/`--save-optional` pass. Pure — no side effects.
  */
+const isDev = (d: BundleDepType) => d === 'devDependencies'
+
 export function buildBundleInstallCommands(
   agent: Agent,
   selections: SpecSelection[],
 ): InstallCommand[] {
-  const isDev = (d: BundleDepType) => d === 'devDependencies'
   const prod = selections.filter((s) => !isDev(s.depType)).map((s) => s.spec)
   const dev = selections.filter((s) => isDev(s.depType)).map((s) => s.spec)
   const cmds: InstallCommand[] = []

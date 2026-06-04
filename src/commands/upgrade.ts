@@ -105,6 +105,7 @@ export async function runUpgrade(opts: UpgradeOptions = {}): Promise<void> {
   const options = flat.map((f) => ({
     value: f.key,
     label: upgradeOptionLabel(f.item, f.scope),
+    hint: f.item.depType === 'devDependencies' ? 'dev' : undefined,
   }))
   const selected = ensure(
     await clack.multiselect<string>({

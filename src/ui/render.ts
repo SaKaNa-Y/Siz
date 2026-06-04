@@ -57,6 +57,5 @@ export function renderTrackedLine(p: TrackedPackage): string {
   const name = ansis.bold(p.name)
   const version = p.version ? ansis.dim(` v${p.version}`) : ''
   const category = p.category ? ` ${ansis.magenta(`[${p.category}]`)}` : ''
-  const tags = p.tags.length ? `  ${p.tags.map((t) => ansis.yellow(`#${t}`)).join(' ')}` : ''
-  return `${mark} ${name}${version}${category}${tags}`
+  return `${mark} ${name}${version}${category}`
 }

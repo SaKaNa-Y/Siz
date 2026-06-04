@@ -2,9 +2,9 @@
 
 > **Si**mpler package **z**earch — a smarter npm package search and management CLI.
 
-Siz is a command-line tool for discovering, installing, and organizing npm packages. Open a live search box, multi-select what you need, then install it with your package manager of choice — or favorite, tag, and track packages for later. Everything you organize is stored locally and stays safe across upgrades.
+Siz is a command-line tool for discovering, installing, and organizing npm packages. Open a live search box, multi-select what you need, then install it with your package manager of choice — or favorite and track packages for later. Everything you organize is stored locally and stays safe across upgrades.
 
-Inspired by [`@rizumu/nai`](https://github.com/LittleSound/nai): Siz keeps nai's interactive search-and-install flow, and adds a discovery and organization layer (favorites, tags, categories, a tracked list) around it. It also borrows ideas from antfu's [`ni`](https://github.com/antfu-collective/ni) (package-manager detection and a unified install experience) and [`taze`](https://github.com/antfu-collective/taze) (ceiling-based dependency upgrades).
+Inspired by [`@rizumu/nai`](https://github.com/LittleSound/nai): Siz keeps nai's interactive search-and-install flow, and adds a discovery and organization layer (favorites, categories, a tracked list) around it. It also borrows ideas from antfu's [`ni`](https://github.com/antfu-collective/ni) (package-manager detection and a unified install experience) and [`taze`](https://github.com/antfu-collective/taze) (ceiling-based dependency upgrades).
 
 ## Features
 
@@ -14,7 +14,7 @@ A check mark means the feature ships today; an empty box means it is planned.
 - [x] Full-text search across name and description (`siz search`)
 - [x] GitHub-style qualifiers in queries (`keyword:` `author:` `scope:` `category:` `tag:`)
 - [x] Install via your package manager (npm / pnpm / yarn / bun / deno) — pick it at install time, with a per-package dependency vs devDependency toggle
-- [x] Favorite, tag, categorize, and track packages in a local list
+- [x] Favorite, categorize, and track packages in a local list
 - [x] Heuristic auto-categorization when you add a package
 - [x] Upgrade project dependencies with ceiling semantics and `--dry-run`
 - [x] Safe local data store (user config dir, non-destructive migrations, atomic writes)
@@ -61,7 +61,6 @@ siz bundle install my-stack
 
 # Organize them
 siz fav zod
-siz tag zod lightweight production
 siz list --fav
 
 # Upgrade this project's dependencies
@@ -98,8 +97,8 @@ Inside the box:
 After you confirm a selection, Siz shows an action menu for the chosen packages:
 
 - **Install** — detects your package manager (npm / pnpm / yarn / bun / deno via [`package-manager-detector`](https://github.com/antfu-collective/package-manager-detector), part of the [`ni`](https://github.com/antfu-collective/ni) project) and lets you confirm or switch it at install time. Each package carries a `[dep]` / `[dev]` badge you flip with `Ctrl+T` in the search box; mixed selections run as separate `add` / `add -D` commands. Siz shows the exact command(s) for confirmation, then runs them, and offers to track the packages afterwards.
-- **Favorite**, **Track**, **Add tags** — add the packages to your local list.
-- **Show install command** — print the command without running anything.
+- **Favorite**, **Track** — add the packages to your local list.
+- **Add to bundle** — save the selection to a reusable bundle.
 
 Pressing **Enter** on an empty box (nothing typed) opens your tracked list instead, so your curated packages are the front door — select any and run the same action menu.
 
@@ -175,7 +174,6 @@ siz bundle rm my-stack          # delete (after confirmation)
 | `siz upgrade [level]` / `siz up`                      | Upgrade this project's dependencies (`major` \| `minor` \| `patch` \| `latest`) |
 | `siz list` / `siz ls`                                 | List tracked packages                                                      |
 | `siz fav <pkg>` / `siz unfav <pkg>`                   | Toggle favorite                                                            |
-| `siz tag <pkg> <tag...>` / `siz untag <pkg> <tag...>` | Manage custom tags                                                         |
 | `siz rm <pkg>`                                        | Untrack a package                                                          |
 | `siz help` / `siz --help`                             | Show help                                                                  |
 | `siz version` / `siz --version`                       | Show the installed version                                                 |
@@ -184,7 +182,6 @@ siz bundle rm my-stack          # delete (after confirmation)
 
 ```bash
 siz list --fav                 # favorites only
-siz list --tag lightweight     # by tag
 siz list --category Testing    # by category
 ```
 
@@ -194,18 +191,18 @@ Siz ships with a starter set of categories and auto-suggests one when you add a 
 
 `Frontend` · `Backend` · `Build Tools` · `Testing` · `Database` · `State Management` · `UI` · `DevTools` · `CLI Tools`
 
-### Tags and favorites
+### Favorites
 
-Tags are free-form — define whatever you like (`favorite`, `frequently-used`, `lightweight`, `production`, `experimental`, and so on). Favorites are surfaced first in `siz list` and marked accordingly.
+Mark packages you reach for often with `siz fav`. Favorites are surfaced first in `siz list` and marked accordingly.
 
 ## Data storage
 
-All of your favorites, tags, and tracked packages are stored in a single JSON file in your user config directory — outside the installed package:
+All of your favorites and tracked packages are stored in a single JSON file in your user config directory — outside the installed package:
 
 - **Linux / macOS:** `$XDG_CONFIG_HOME/siz/data.json` (defaults to `~/.config/siz/data.json`)
 - **Windows:** `%APPDATA%\siz\data.json`
 
-Because this file lives in your home directory, updating or reinstalling Siz never touches it. The file also carries a schema `version`, and Siz applies non-destructive migrations on load: new versions only add fields and never drop your packages, favorites, tags, or any unknown keys. Writes are atomic (temp file plus rename) to avoid corruption.
+Because this file lives in your home directory, updating or reinstalling Siz never touches it. The file also carries a schema `version`, and Siz applies non-destructive migrations on load: new versions only add fields and never drop your packages, favorites, or any unknown keys. Writes are atomic (temp file plus rename) to avoid corruption.
 
 You can safely run `npm i -g @sakana-y/siz@latest` — your data stays put.
 

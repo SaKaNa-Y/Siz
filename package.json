@@ -1,15 +1,14 @@
 {
   "name": "@sakana-y/siz",
   "version": "0.1.2",
-  "description": "Smarter npm package search & management CLI — search, favorite, tag and track packages.",
+  "description": "Smarter npm package search & management CLI — search, favorite and track packages.",
   "keywords": [
     "cli",
     "discovery",
     "favorites",
     "npm",
     "packages",
-    "search",
-    "tags"
+    "search"
   ],
   "license": "MIT",
   "repository": {
@@ -34,7 +33,7 @@
     "provenance": true
   },
   "scripts": {
-    "build": "tsdown",
+    "build": "tsdown --config-loader tsx",
     "dev": "tsx src/cli.ts",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -49,27 +48,27 @@
     "release": "pnpm build && changeset publish"
   },
   "dependencies": {
-    "@clack/core": "^1.1.0",
-    "@clack/prompts": "^1.1.0",
-    "ansis": "^4.2.0",
+    "@clack/core": "^1.4.1",
+    "@clack/prompts": "^1.5.1",
+    "ansis": "^4.3.1",
     "cac": "^7.0.0",
-    "fast-npm-meta": "^1.4.2",
+    "fast-npm-meta": "^2.0.0",
     "fzf": "^0.5.2",
-    "package-manager-detector": "^1.0.0",
+    "package-manager-detector": "^1.6.0",
     "semver": "^7.8.1",
     "tinyglobby": "^0.2.17"
   },
   "devDependencies": {
     "@changesets/changelog-github": "^0.7.0",
     "@changesets/cli": "^2.31.0",
-    "@types/node": "^22.10.0",
+    "@types/node": "^20.19.0",
     "@types/semver": "^7.7.1",
-    "oxfmt": "^0.52.0",
-    "oxlint": "^1.67.0",
-    "tsdown": "^0.15.6",
-    "tsx": "^4.19.0",
-    "typescript": "^5.7.0",
-    "vitest": "^3.0.0"
+    "oxfmt": "^0.53.0",
+    "oxlint": "^1.68.0",
+    "tsdown": "^0.22.1",
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.8"
   },
   "engines": {
     "node": ">=20.19.0"

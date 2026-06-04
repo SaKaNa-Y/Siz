@@ -166,7 +166,7 @@ describe('collectQueryNames', () => {
       manifest('/root/package.json', [dep('vue', '^3.4.0'), dep('ui', 'workspace:*')]),
       manifest('/root/packages/a/package.json', [dep('vue', '^3.5.0'), dep('zod', '^3.0.0')]),
     ]
-    expect(collectQueryNames(manifests).sort()).toEqual(['vue', 'zod'])
+    expect(collectQueryNames(manifests).toSorted()).toEqual(['vue', 'zod'])
   })
 })
 

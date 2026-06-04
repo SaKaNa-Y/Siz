@@ -25,14 +25,15 @@ export function renderVersionDelta(item: UpgradePlanItem): string {
 }
 
 /**
- * Multiselect row label, e.g. `[dev] vitest  2.0.0 → ^3.0.0 (major)`.
+ * Multiselect row label, e.g. `vitest  2.0.0 → ^3.0.0 (major)`. The dev-dependency
+ * marker is surfaced via clack's per-option `hint` (see `runUpgrade`), not the label,
+ * so it doesn't collide with the multiselect's dim-based selection styling.
  * In recursive mode, `scope` tags the row with its package dir (e.g. `packages/ui`).
  */
 export function upgradeOptionLabel(item: UpgradePlanItem, scope?: string): string {
   const where = scope ? ansis.dim(`${scope} `) : ''
-  const dev = item.depType === 'devDependencies' ? `${ansis.dim('[dev]')} ` : ''
   const level = item.diff ? ` ${ansis.dim(`(${item.diff})`)}` : ''
-  return `${where}${dev}${ansis.bold(item.name)}  ${renderVersionDelta(item)}${level}`
+  return `${where}${ansis.bold(item.name)}  ${renderVersionDelta(item)}${level}`
 }
 
 /** One-line summary of an upgrade plan for the spinner stop message. */

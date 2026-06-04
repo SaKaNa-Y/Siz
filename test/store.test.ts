@@ -5,7 +5,6 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import {
   CURRENT_VERSION,
-  addTags,
   addToBundle,
   getBundle,
   listBundles,
@@ -35,7 +34,7 @@ afterEach(() => {
 })
 
 describe('migration is non-destructive (update-safety constraint)', () => {
-  it('preserves every tracked package, favorite, and tag from an older file', () => {
+  it('preserves every tracked package, favorite, and unknown field from an older file', () => {
     // Simulate a v0 data file written by an older Siz version, with extra
     // fields we have never seen before.
     const legacy = {
@@ -56,15 +55,18 @@ describe('migration is non-destructive (update-safety constraint)', () => {
     expect(data.version).toBe(CURRENT_VERSION)
 
     // No package lost.
-    expect(Object.keys(data.packages).sort()).toEqual(['lodash', 'react', 'some-future-pkg'])
+    expect(Object.keys(data.packages).toSorted()).toEqual(['lodash', 'react', 'some-future-pkg'])
 
     // Favorites preserved.
     expect(data.packages.lodash.favorite).toBe(true)
     expect(data.packages.react.favorite).toBe(false)
 
-    // Tags preserved.
-    expect(data.packages.lodash.tags).toEqual(['lightweight', 'frequently-used'])
-    expect(data.packages.react.tags).toEqual(['production'])
+    // Retired user-defined `tags` data round-trips untouched as an unknown field.
+    expect((data.packages.lodash as unknown as Record<string, unknown>).tags).toEqual([
+      'lightweight',
+      'frequently-used',
+    ])
+    expect((data.packages.react as unknown as Record<string, unknown>).tags).toEqual(['production'])
 
     // Existing optional fields preserved.
     expect(data.packages.react.category).toBe('Frontend')
@@ -97,34 +99,24 @@ describe('migration is non-destructive (update-safety constraint)', () => {
 })
 
 describe('mutators persist and never clobber user state', () => {
-  it('tracking an existing package keeps its favorite and tags', () => {
+  it('tracking an existing package keeps its favorite', () => {
     trackPackage({ name: 'vue', version: '3.0.0' }, file)
     setFavorite('vue', true, file)
-    addTags('vue', ['ui'], file)
 
-    // Re-track with new version — must not reset favorite/tags.
+    // Re-track with new version — must not reset favorite.
     trackPackage({ name: 'vue', version: '3.5.0' }, file)
 
     const data = loadData(file)
     expect(data.packages.vue.favorite).toBe(true)
-    expect(data.packages.vue.tags).toEqual(['ui'])
     expect(data.packages.vue.version).toBe('3.5.0')
   })
 
-  it('addTags de-duplicates', () => {
-    addTags('x', ['a', 'b'], file)
-    addTags('x', ['b', 'c'], file)
-    expect(loadData(file).packages.x.tags).toEqual(['a', 'b', 'c'])
-  })
-
-  it('listPackages filters by favorite, tag, and category', () => {
+  it('listPackages filters by favorite and category', () => {
     trackPackage({ name: 'p1', category: 'Frontend' }, file)
     setFavorite('p1', true, file)
-    addTags('p1', ['fast'], file)
     trackPackage({ name: 'p2', category: 'Backend' }, file)
 
     expect(listPackages({ favorite: true }, file).map((p) => p.name)).toEqual(['p1'])
-    expect(listPackages({ tag: 'fast' }, file).map((p) => p.name)).toEqual(['p1'])
     expect(listPackages({ category: 'Backend' }, file).map((p) => p.name)).toEqual(['p2'])
     expect(listPackages({}, file)).toHaveLength(2)
   })
