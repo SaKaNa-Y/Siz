@@ -46,16 +46,21 @@ export {
 export {
   findPackageJson,
   loadProjectManifest,
+  loadManifestAt,
+  discoverManifests,
   collectDeps,
   applyRangeEdits,
   writeManifest,
   isUpgradableSpecifier,
   type DepType,
+  type DiscoverOptions,
   type ProjectDep,
   type ProjectManifest,
 } from './core/project.ts'
 export {
   buildUpgradePlan,
+  planManifests,
+  collectQueryNames,
   analyzeDep,
   resolveTarget,
   currentVersionFromRange,
@@ -65,6 +70,7 @@ export {
   type UpgradeMode,
   type UpgradePlan,
   type UpgradePlanItem,
+  type ManifestPlan,
   type DepAnalysis,
   type VersionInfo,
 } from './core/upgrade.ts'

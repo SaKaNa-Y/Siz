@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { dirname, join, normalize } from 'node:path'
 import process from 'node:process'
+import { glob } from 'tinyglobby'
 
 import { escapeRegExp } from './text.ts'
 
@@ -74,10 +75,8 @@ export function collectDeps(data: Record<string, unknown>): ProjectDep[] {
   return deps
 }
 
-/** Load the nearest package.json (walking up from `cwd`). Returns undefined if none. */
-export function loadProjectManifest(cwd?: string): ProjectManifest | undefined {
-  const path = findPackageJson(cwd)
-  if (!path) return undefined
+/** Read, parse, and collect deps from a single package.json at `path`. */
+export function loadManifestAt(path: string): ProjectManifest {
   const raw = readFileSync(path, 'utf8')
   let data: Record<string, unknown>
   try {
@@ -86,6 +85,52 @@ export function loadProjectManifest(cwd?: string): ProjectManifest | undefined {
     throw new Error(`Failed to parse ${path}: ${(err as Error).message}`)
   }
   return { path, raw, data, deps: collectDeps(data) }
+}
+
+/** Load the nearest package.json (walking up from `cwd`). Returns undefined if none. */
+export function loadProjectManifest(cwd?: string): ProjectManifest | undefined {
+  const path = findPackageJson(cwd)
+  if (!path) return undefined
+  return loadManifestAt(path)
+}
+
+/** Directories never worth scanning for workspace manifests. */
+const DEFAULT_IGNORE = ['**/node_modules/**', '**/dist/**', '**/.git/**']
+
+export interface DiscoverOptions {
+  /** Glob every package.json under `cwd` instead of just the nearest one. */
+  recursive?: boolean
+  /** Extra ignore globs, merged with the defaults (node_modules, dist, .git). */
+  ignore?: string[]
+}
+
+/**
+ * Discover project manifests to upgrade.
+ *
+ * Non-recursive (default): the single nearest package.json walking up from
+ * `cwd` — identical to {@link loadProjectManifest}. Recursive: a Taze-style
+ * brute-force glob of every `package.json` under `cwd` (ignoring node_modules,
+ * dist, .git, plus any extra `ignore` globs), sorted by path.
+ */
+export async function discoverManifests(
+  cwd: string = process.cwd(),
+  opts: DiscoverOptions = {},
+): Promise<ProjectManifest[]> {
+  if (!opts.recursive) {
+    const manifest = loadProjectManifest(cwd)
+    return manifest ? [manifest] : []
+  }
+  const matches = await glob('**/package.json', {
+    cwd,
+    absolute: true,
+    onlyFiles: true,
+    dot: false,
+    ignore: [...DEFAULT_IGNORE, ...(opts.ignore ?? [])],
+  })
+  // tinyglobby yields POSIX-style paths even on Windows; normalize to native
+  // separators so results match findPackageJson()/loadProjectManifest().
+  const paths = matches.map((p) => normalize(p)).sort((a, b) => a.localeCompare(b))
+  return paths.map(loadManifestAt)
 }
 
 /**

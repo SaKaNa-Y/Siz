@@ -6,8 +6,10 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
   applyRangeEdits,
   collectDeps,
+  discoverManifests,
   findPackageJson,
   isUpgradableSpecifier,
+  loadManifestAt,
   loadProjectManifest,
   writeManifest,
 } from '../src/core/project.ts'
@@ -148,5 +150,58 @@ describe('loadProjectManifest + writeManifest', () => {
   it('throws a friendly error on malformed JSON', () => {
     writeFileSync(join(dir, 'package.json'), '{ not json')
     expect(() => loadProjectManifest(dir)).toThrow(/Failed to parse/)
+  })
+})
+
+describe('loadManifestAt', () => {
+  it('reads, parses, and collects deps from a single file', () => {
+    const file = join(dir, 'package.json')
+    writeFileSync(file, `{\n  "dependencies": { "vue": "^3.4.0" }\n}\n`)
+    const m = loadManifestAt(file)
+    expect(m.path).toBe(file)
+    expect(m.deps).toEqual([{ name: 'vue', range: '^3.4.0', depType: 'dependencies' }])
+  })
+})
+
+describe('discoverManifests', () => {
+  beforeEach(() => {
+    // A small monorepo: root + two members, plus a manifest buried in node_modules.
+    writeFileSync(join(dir, 'package.json'), '{ "dependencies": { "vue": "^3.0.0" } }')
+    for (const name of ['a', 'b']) {
+      const pkg = join(dir, 'packages', name)
+      mkdirSync(pkg, { recursive: true })
+      writeFileSync(join(pkg, 'package.json'), `{ "name": "${name}" }`)
+    }
+    const nm = join(dir, 'packages', 'a', 'node_modules', 'dep')
+    mkdirSync(nm, { recursive: true })
+    writeFileSync(join(nm, 'package.json'), '{ "name": "dep" }')
+  })
+
+  it('non-recursive returns only the nearest manifest', async () => {
+    const found = await discoverManifests(dir)
+    expect(found.map((m) => m.path)).toEqual([join(dir, 'package.json')])
+  })
+
+  it('recursive finds every real manifest, sorted, skipping node_modules', async () => {
+    const found = await discoverManifests(dir, { recursive: true })
+    expect(found.map((m) => m.path)).toEqual([
+      join(dir, 'package.json'),
+      join(dir, 'packages', 'a', 'package.json'),
+      join(dir, 'packages', 'b', 'package.json'),
+    ])
+  })
+
+  it('honors extra ignore globs', async () => {
+    const found = await discoverManifests(dir, { recursive: true, ignore: ['**/packages/b/**'] })
+    expect(found.map((m) => m.path)).toEqual([
+      join(dir, 'package.json'),
+      join(dir, 'packages', 'a', 'package.json'),
+    ])
+  })
+
+  it('returns an empty array when nothing matches', async () => {
+    const empty = join(dir, 'empty')
+    mkdirSync(empty)
+    expect(await discoverManifests(empty, { recursive: true })).toEqual([])
   })
 })

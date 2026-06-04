@@ -24,11 +24,15 @@ export function renderVersionDelta(item: UpgradePlanItem): string {
   return `${ansis.dim(item.current)} ${ansis.dim('→')} ${colorForDiff(item.diff)(item.proposed)}`
 }
 
-/** Multiselect row label, e.g. `[dev] vitest  2.0.0 → ^3.0.0 (major)`. */
-export function upgradeOptionLabel(item: UpgradePlanItem): string {
+/**
+ * Multiselect row label, e.g. `[dev] vitest  2.0.0 → ^3.0.0 (major)`.
+ * In recursive mode, `scope` tags the row with its package dir (e.g. `packages/ui`).
+ */
+export function upgradeOptionLabel(item: UpgradePlanItem, scope?: string): string {
+  const where = scope ? ansis.dim(`${scope} `) : ''
   const dev = item.depType === 'devDependencies' ? `${ansis.dim('[dev]')} ` : ''
   const level = item.diff ? ` ${ansis.dim(`(${item.diff})`)}` : ''
-  return `${dev}${ansis.bold(item.name)}  ${renderVersionDelta(item)}${level}`
+  return `${where}${dev}${ansis.bold(item.name)}  ${renderVersionDelta(item)}${level}`
 }
 
 /** One-line summary of an upgrade plan for the spinner stop message. */

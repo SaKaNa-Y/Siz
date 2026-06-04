@@ -127,10 +127,13 @@ siz search "fast node logger" --list
 siz upgrade            # offer the latest of everything
 siz upgrade minor      # cap upgrades at the same major
 siz upgrade patch      # cap at the same major.minor
+siz upgrade -r         # recurse into every package.json under the current dir
 siz upgrade --dry-run  # preview the changes without writing or installing
 ```
 
 Levels use **ceiling** semantics (like [`taze`](https://github.com/antfu-collective/taze)): `minor` lifts each package to the newest version within its current major, `patch` to the newest within its current major.minor, and bare `upgrade` / `major` / `latest` to the absolute newest. Pre-1.0 `0.x` versions are treated as breaking, so `minor`/`patch` never cross a `0.x` boundary.
+
+In a monorepo, `-r` / `--recursive` discovers every `package.json` under the current directory (skipping `node_modules`, `dist`, and `.git`) and offers all of their updates in one list, each row tagged with its package. Each dependency is resolved independently per package, the manifests are rewritten in place, and a single install runs at the root. Without `-r`, `siz upgrade` only touches the nearest `package.json`.
 
 Specifiers that aren't plain registry ranges — `workspace:`, `catalog:`, npm aliases, git/file/link sources — and packages not found on the registry are skipped and left untouched.
 
@@ -228,6 +231,13 @@ trackPackage({ name: 'urql', category: suggestCategory({ name: 'urql' }) })
 const agent = await detectPM()
 console.log(formatCommand(buildInstallCommand(agent, ['urql'], { dev: false })))
 ```
+
+## Future plans
+
+Monorepo support is being built out incrementally. `siz upgrade -r` already upgrades every `package.json` in a workspace; still on the roadmap:
+
+- **pnpm catalogs** — upgrade versions declared once under `catalog:` / `catalogs:` in `pnpm-workspace.yaml`, with format-preserving edits, and resolve `catalog:` references accordingly. (Yarn and Bun catalogs to follow.)
+- **Fuller workspace awareness** — honor declared workspace globs, guard against clobbering nested independent workspaces (Taze's `--ignore-other-workspaces`), and reach `pnpm.overrides` / `resolutions`.
 
 ## License
 

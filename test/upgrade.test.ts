@@ -1,14 +1,16 @@
 import { describe, expect, it } from 'vitest'
 
-import type { ProjectDep } from '../src/core/project.ts'
+import type { ProjectDep, ProjectManifest } from '../src/core/project.ts'
 import type { VersionInfo } from '../src/core/upgrade.ts'
 
 import {
   analyzeDep,
   applyPrefix,
   buildUpgradePlan,
+  collectQueryNames,
   currentVersionFromRange,
   detectRangePrefix,
+  planManifests,
   resolveTarget,
 } from '../src/core/upgrade.ts'
 
@@ -22,6 +24,10 @@ function info(
 
 function dep(name: string, range: string, devDep = false): ProjectDep {
   return { name, range, depType: devDep ? 'devDependencies' : 'dependencies' }
+}
+
+function manifest(path: string, deps: ProjectDep[]): ProjectManifest {
+  return { path, raw: '', data: {}, deps }
 }
 
 describe('currentVersionFromRange', () => {
@@ -151,5 +157,40 @@ describe('buildUpgradePlan', () => {
     expect(byName.eslint.proposed).toBe('8.5.0') // exact pin stays exact, no major cross
     expect(plan.upToDate.map((i) => i.name)).toEqual(['stable'])
     expect(plan.skipped).toEqual([{ name: 'ui', depType: 'dependencies', reason: 'protocol' }])
+  })
+})
+
+describe('collectQueryNames', () => {
+  it('dedupes upgradable names across manifests and skips non-registry specifiers', () => {
+    const manifests = [
+      manifest('/root/package.json', [dep('vue', '^3.4.0'), dep('ui', 'workspace:*')]),
+      manifest('/root/packages/a/package.json', [dep('vue', '^3.5.0'), dep('zod', '^3.0.0')]),
+    ]
+    expect(collectQueryNames(manifests).sort()).toEqual(['vue', 'zod'])
+  })
+})
+
+describe('planManifests', () => {
+  it('plans each manifest independently from a shared version map', () => {
+    const manifests = [
+      manifest('/root/package.json', [dep('vue', '^3.4.0')]),
+      manifest('/root/packages/a/package.json', [dep('vue', '^3.4.0'), dep('zod', '^3.0.0')]),
+    ]
+    const versions = new Map<string, VersionInfo>([
+      ['vue', info('vue', ['3.4.0', '3.9.0'])],
+      ['zod', info('zod', ['3.0.0', '3.23.0'])],
+    ])
+    const planned = planManifests(manifests, versions, 'minor')
+
+    expect(planned.map((p) => p.manifest.path)).toEqual([
+      '/root/package.json',
+      '/root/packages/a/package.json',
+    ])
+    // Same dep in both manifests resolves to the same target, independently.
+    expect(planned[0].plan.upgradable.map((i) => [i.name, i.proposed])).toEqual([['vue', '^3.9.0']])
+    expect(planned[1].plan.upgradable.map((i) => [i.name, i.proposed])).toEqual([
+      ['vue', '^3.9.0'],
+      ['zod', '^3.23.0'],
+    ])
   })
 })

@@ -3,7 +3,7 @@ import type { ReleaseType } from 'semver'
 import { getVersionsBatch } from 'fast-npm-meta'
 import { diff, gt, maxSatisfying, minVersion, prerelease, valid } from 'semver'
 
-import type { DepType, ProjectDep } from './project.ts'
+import type { DepType, ProjectDep, ProjectManifest } from './project.ts'
 
 import { isUpgradableSpecifier } from './project.ts'
 
@@ -192,6 +192,42 @@ export function buildUpgradePlan(
     }
   }
   return { upgradable, upToDate, skipped }
+}
+
+/** A manifest paired with its computed upgrade plan. */
+export interface ManifestPlan {
+  manifest: ProjectManifest
+  plan: UpgradePlan
+}
+
+/**
+ * Unique upgradable dependency names across every manifest — the set to fetch
+ * registry data for in a single batched request.
+ */
+export function collectQueryNames(manifests: ProjectManifest[]): string[] {
+  const names = new Set<string>()
+  for (const m of manifests) {
+    for (const dep of m.deps) {
+      if (isUpgradableSpecifier(dep.range)) names.add(dep.name)
+    }
+  }
+  return [...names]
+}
+
+/**
+ * Plan each manifest independently against a shared registry map. Resolution is
+ * per-package (Taze-style): the same dependency in two manifests is analyzed
+ * separately, though it draws from the same {@link VersionInfo} data.
+ */
+export function planManifests(
+  manifests: ProjectManifest[],
+  versions: Map<string, VersionInfo>,
+  mode: UpgradeMode,
+): ManifestPlan[] {
+  return manifests.map((manifest) => ({
+    manifest,
+    plan: buildUpgradePlan(manifest.deps, versions, mode),
+  }))
 }
 
 /** Fetch registry version lists for a set of package names (one batched request). */
