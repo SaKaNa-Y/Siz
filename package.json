@@ -56,7 +56,8 @@
     "fast-npm-meta": "^1.4.2",
     "fzf": "^0.5.2",
     "package-manager-detector": "^1.0.0",
-    "semver": "^7.8.1"
+    "semver": "^7.8.1",
+    "tinyglobby": "^0.2.17"
   },
   "devDependencies": {
     "@changesets/changelog-github": "^0.7.0",

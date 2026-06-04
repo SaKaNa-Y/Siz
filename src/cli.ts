@@ -121,13 +121,14 @@ cli
     'Upgrade project dependencies (level: major | minor | patch | latest)',
   )
   .alias('up')
+  .option('-r, --recursive', 'Recursively upgrade every package.json under the current directory')
   .option('--dry-run', 'Preview updates without writing package.json or installing')
-  .action(async (level: string | undefined, opts: { dryRun?: boolean }) => {
+  .action(async (level: string | undefined, opts: { recursive?: boolean; dryRun?: boolean }) => {
     const mode = (level ?? 'latest') as UpgradeMode
     if (!UPGRADE_LEVELS.includes(mode)) {
       throw new Error(`Unknown upgrade level "${level}". Use: major | minor | patch | latest`)
     }
-    await runUpgrade({ mode, dryRun: opts.dryRun })
+    await runUpgrade({ mode, recursive: opts.recursive, dryRun: opts.dryRun })
   })
 
 cli
