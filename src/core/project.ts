@@ -1,8 +1,10 @@
-import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
-import { dirname, join, normalize, relative } from 'node:path'
+import { readFileSync, renameSync, writeFileSync } from 'node:fs'
+import { dirname, normalize, relative } from 'node:path'
 import process from 'node:process'
 import { glob } from 'tinyglobby'
 
+import { findWorkspaceYaml, readWorkspacePackages } from './catalog.ts'
+import { findUp } from './paths.ts'
 import { escapeRegExp } from './text.ts'
 
 /** The two dependency blocks Siz upgrades. */
@@ -56,15 +58,7 @@ export function relativeScope(cwd: string, dir: string): string | undefined {
 
 /** Walk up from `cwd` to the filesystem root, returning the nearest package.json. */
 export function findPackageJson(cwd: string = process.cwd()): string | undefined {
-  let dir = cwd
-  while (dir) {
-    const candidate = join(dir, 'package.json')
-    if (existsSync(candidate)) return candidate
-    const parent = dirname(dir)
-    if (parent === dir) return undefined // reached the filesystem root
-    dir = parent
-  }
-  return undefined
+  return findUp('package.json', cwd)
 }
 
 /** Extract every string-valued dependency from both dep blocks. */
@@ -110,13 +104,81 @@ export interface DiscoverOptions {
   ignore?: string[]
 }
 
+/** The declared workspace root and its member globs (pnpm or npm/yarn). */
+export interface WorkspaceGlobs {
+  /** Directory holding the workspace definition (pnpm-workspace.yaml or package.json). */
+  root: string
+  /** Declared member globs, e.g. `['packages/*']`. May be empty (root-only). */
+  patterns: string[]
+}
+
+/** Read the npm/yarn `workspaces` field (array or `{ packages: [...] }`); undefined when absent. */
+function readWorkspacesField(path: string): string[] | undefined {
+  let data: Record<string, unknown>
+  try {
+    data = JSON.parse(readFileSync(path, 'utf8')) as Record<string, unknown>
+  } catch {
+    return undefined
+  }
+  const ws = data.workspaces
+  if (Array.isArray(ws)) return ws.filter((p): p is string => typeof p === 'string')
+  if (ws && typeof ws === 'object') {
+    const pkgs = (ws as { packages?: unknown }).packages
+    if (Array.isArray(pkgs)) return pkgs.filter((p): p is string => typeof p === 'string')
+  }
+  return undefined
+}
+
+/**
+ * Resolve the declared workspace member globs for `cwd`, if any. Prefers pnpm's
+ * `pnpm-workspace.yaml` (`packages:`), then the npm/yarn `workspaces` field of
+ * the nearest package.json. Returns undefined when no workspace is declared —
+ * the signal for {@link discoverManifests} to fall back to a brute-force glob.
+ */
+export function loadWorkspaceGlobs(cwd: string = process.cwd()): WorkspaceGlobs | undefined {
+  const yamlPath = findWorkspaceYaml(cwd)
+  if (yamlPath) return { root: dirname(yamlPath), patterns: readWorkspacePackages(yamlPath) }
+
+  const pkgPath = findPackageJson(cwd)
+  if (pkgPath) {
+    const patterns = readWorkspacesField(pkgPath)
+    if (patterns) return { root: dirname(pkgPath), patterns }
+  }
+  return undefined
+}
+
+/** Turn a workspace member glob (a directory pattern) into a package.json glob, preserving negation. */
+function toManifestGlob(pattern: string): string {
+  const negated = pattern.startsWith('!')
+  const body = (negated ? pattern.slice(1) : pattern).replace(/\/+$/, '')
+  const manifestGlob = body.endsWith('/package.json') ? body : `${body}/package.json`
+  return negated ? `!${manifestGlob}` : manifestGlob
+}
+
+/**
+ * Normalize tinyglobby's POSIX-style output to native separators (so paths match
+ * findPackageJson()/loadProjectManifest()), dedupe, sort, and load each.
+ */
+function finalizeManifests(matches: string[]): ProjectManifest[] {
+  const paths = [...new Set(matches.map((p) => normalize(p)))].toSorted((a, b) =>
+    a.localeCompare(b),
+  )
+  return paths.map(loadManifestAt)
+}
+
 /**
  * Discover project manifests to upgrade.
  *
  * Non-recursive (default): the single nearest package.json walking up from
- * `cwd` — identical to {@link loadProjectManifest}. Recursive: a Taze-style
- * brute-force glob of every `package.json` under `cwd` (ignoring node_modules,
- * dist, .git, plus any extra `ignore` globs), sorted by path.
+ * `cwd` — identical to {@link loadProjectManifest}.
+ *
+ * Recursive: workspace-aware. When `cwd` is inside a declared workspace
+ * (pnpm `packages:` or an npm/yarn `workspaces` field), only that workspace's
+ * declared members (plus the root manifest) are returned — so stray
+ * `package.json` files in `examples/`, `fixtures/`, etc. are not treated as
+ * members. With no workspace definition, falls back to a Taze-style brute-force
+ * glob of every `package.json` under `cwd`. Both honor the default ignores
+ * (node_modules, dist, .git) plus any extra `ignore` globs, sorted by path.
  */
 export async function discoverManifests(
   cwd: string = process.cwd(),
@@ -126,17 +188,30 @@ export async function discoverManifests(
     const manifest = loadProjectManifest(cwd)
     return manifest ? [manifest] : []
   }
+  const ignore = [...DEFAULT_IGNORE, ...(opts.ignore ?? [])]
+
+  const ws = loadWorkspaceGlobs(cwd)
+  if (ws) {
+    // The root manifest is always a member; member globs are matched from the root.
+    const patterns = ['package.json', ...ws.patterns.map(toManifestGlob)]
+    const matches = await glob(patterns, {
+      cwd: ws.root,
+      absolute: true,
+      onlyFiles: true,
+      dot: false,
+      ignore,
+    })
+    return finalizeManifests(matches)
+  }
+
   const matches = await glob('**/package.json', {
     cwd,
     absolute: true,
     onlyFiles: true,
     dot: false,
-    ignore: [...DEFAULT_IGNORE, ...(opts.ignore ?? [])],
+    ignore,
   })
-  // tinyglobby yields POSIX-style paths even on Windows; normalize to native
-  // separators so results match findPackageJson()/loadProjectManifest().
-  const paths = matches.map((p) => normalize(p)).toSorted((a, b) => a.localeCompare(b))
-  return paths.map(loadManifestAt)
+  return finalizeManifests(matches)
 }
 
 /**

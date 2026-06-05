@@ -3,6 +3,7 @@ import type { ReleaseType } from 'semver'
 import { getVersionsBatch } from 'fast-npm-meta'
 import { diff, gt, maxSatisfying, minVersion, prerelease, valid } from 'semver'
 
+import type { CatalogManifest } from './catalog.ts'
 import type { DepType, ProjectDep, ProjectManifest } from './project.ts'
 
 import { isUpgradableSpecifier } from './project.ts'
@@ -170,6 +171,12 @@ export function analyzeDep(
   return { ...base, current, latest, target, diff: safeDiff(current, target), latestDiff }
 }
 
+/** Build the upgradable item for a non-skipped analysis: attach the prefixed `proposed` range. */
+function toUpgradePlanItem(a: DepAnalysis): UpgradePlanItem {
+  const proposed = applyPrefix(detectRangePrefix(a.range), a.target as string)
+  return { ...a, current: a.current as string, target: a.target as string, proposed }
+}
+
 /** Partition every dependency into upgradable / up-to-date / skipped under a mode. */
 export function buildUpgradePlan(
   deps: ProjectDep[],
@@ -187,8 +194,7 @@ export function buildUpgradePlan(
     } else if (a.skip) {
       skipped.push({ name: a.name, depType: a.depType, reason: a.skip })
     } else {
-      const proposed = applyPrefix(detectRangePrefix(a.range), a.target as string)
-      upgradable.push({ ...a, current: a.current as string, target: a.target as string, proposed })
+      upgradable.push(toUpgradePlanItem(a))
     }
   }
   return { upgradable, upToDate, skipped }
@@ -228,6 +234,44 @@ export function planManifests(
     manifest,
     plan: buildUpgradePlan(manifest.deps, versions, mode),
   }))
+}
+
+/** An upgradable pnpm catalog entry, tagged with the catalog it lives in. */
+export interface CatalogPlanItem extends UpgradePlanItem {
+  /** `'default'` for the top-level `catalog:` block, otherwise the named catalog. */
+  catalog: string
+}
+
+/**
+ * Unique upgradable catalog entry names — joined with {@link collectQueryNames}
+ * so catalog versions share the single batched registry request.
+ */
+export function collectCatalogNames(catalog: CatalogManifest): string[] {
+  const names = new Set<string>()
+  for (const entry of catalog.entries) {
+    if (isUpgradableSpecifier(entry.range)) names.add(entry.name)
+  }
+  return [...names]
+}
+
+/**
+ * Plan each catalog entry against the shared registry map, reusing the same
+ * per-package analysis as package.json deps. Each entry is treated as a
+ * standalone `dependencies` range; only those with a concrete upgrade are kept.
+ */
+export function planCatalog(
+  catalog: CatalogManifest,
+  versions: Map<string, VersionInfo>,
+  mode: UpgradeMode,
+): CatalogPlanItem[] {
+  const items: CatalogPlanItem[] = []
+  for (const entry of catalog.entries) {
+    const dep: ProjectDep = { name: entry.name, range: entry.range, depType: 'dependencies' }
+    const a = analyzeDep(dep, versions.get(entry.name), mode)
+    if (a.skip) continue
+    items.push({ ...toUpgradePlanItem(a), catalog: entry.catalog })
+  }
+  return items
 }
 
 /** Fetch registry version lists for a set of package names (one batched request). */

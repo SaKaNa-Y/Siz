@@ -46,6 +46,7 @@ export {
   loadProjectManifest,
   loadManifestAt,
   discoverManifests,
+  loadWorkspaceGlobs,
   collectDeps,
   applyRangeEdits,
   writeManifest,
@@ -54,6 +55,7 @@ export {
   type DiscoverOptions,
   type ProjectDep,
   type ProjectManifest,
+  type WorkspaceGlobs,
 } from './core/project.ts'
 export {
   buildUpgradePlan,
@@ -65,12 +67,25 @@ export {
   detectRangePrefix,
   applyPrefix,
   fetchVersionInfo,
+  planCatalog,
+  collectCatalogNames,
   type UpgradeMode,
   type UpgradePlan,
   type UpgradePlanItem,
   type ManifestPlan,
   type DepAnalysis,
   type VersionInfo,
+  type CatalogPlanItem,
 } from './core/upgrade.ts'
+export {
+  findWorkspaceYaml,
+  loadCatalogManifest,
+  discoverCatalog,
+  readWorkspacePackages,
+  applyCatalogEdits,
+  DEFAULT_CATALOG,
+  type CatalogEntry,
+  type CatalogManifest,
+} from './core/catalog.ts'
 export { searchPrompt, type SearchOption, type SearchPromptOptions } from './ui/search-prompt.ts'
 export { highlightKeywords } from './ui/highlight.ts'

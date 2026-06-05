@@ -20,11 +20,15 @@ A check mark means the feature ships today; an empty box means it is planned.
 - [x] Safe local data store (user config dir, non-destructive migrations, atomic writes)
 - [x] Preset bundles — named groups of packages you can install together in one step
 - [x] Library API for programmatic use
+- [x] pnpm catalog upgrades — bump `catalog:` / `catalogs:` versions in `pnpm-workspace.yaml`
+- [x] Monorepo install & recursive upgrades — workspace picker on install, `siz upgrade -r`
+- [x] Workspace-aware discovery — honor declared `packages:` / `workspaces` globs, skip stray manifests
 - [ ] Dependency rules — project-local, committable allow/restrict config
-- [ ] Catalog support — pnpm/yarn catalog management during install
+- [ ] Catalog management during install — `ni`-style `catalog:` writing
+- [ ] Yarn & Bun catalog upgrades — extend catalog upgrades beyond pnpm
+- [ ] Nested-workspace guard & root pins — `--ignore-other-workspaces`, `pnpm.overrides` / `resolutions`
 - [ ] AI-assisted search — opt-in LLM query expansion and result reranking
 - [ ] Team-shared presets
-- [ ] Monorepo support — workspace-aware tracking, install, and recursive upgrades
 - [ ] Package analytics and usage statistics
 - [ ] Dependency health checks (outdated / deprecated / vulnerable)
 - [ ] Smart replacement suggestions for lighter or better-maintained alternatives
@@ -132,9 +136,11 @@ siz upgrade --dry-run  # preview the changes without writing or installing
 
 Levels use **ceiling** semantics (like [`taze`](https://github.com/antfu-collective/taze)): `minor` lifts each package to the newest version within its current major, `patch` to the newest within its current major.minor, and bare `upgrade` / `major` / `latest` to the absolute newest. Pre-1.0 `0.x` versions are treated as breaking, so `minor`/`patch` never cross a `0.x` boundary.
 
-In a monorepo, `-r` / `--recursive` discovers every `package.json` under the current directory (skipping `node_modules`, `dist`, and `.git`) and offers all of their updates in one list, each row tagged with its package. Each dependency is resolved independently per package, the manifests are rewritten in place, and a single install runs at the root. Without `-r`, `siz upgrade` only touches the nearest `package.json`.
+In a monorepo, `-r` / `--recursive` discovers the workspace's member `package.json` files and offers all of their updates in one list, each row tagged with its package. Discovery is **workspace-aware**: when a workspace is declared — pnpm's `packages:` in `pnpm-workspace.yaml`, or an npm/yarn `workspaces` field — only the declared members (plus the root) are scanned, so a stray `package.json` in `examples/`, `fixtures/`, or `docs/` is left alone. With no workspace definition, `-r` falls back to globbing every `package.json` under the current directory (skipping `node_modules`, `dist`, and `.git`). Each dependency is resolved independently per package, the manifests are rewritten in place, and a single install runs at the root. Without `-r`, `siz upgrade` only touches the nearest `package.json`.
 
-Specifiers that aren't plain registry ranges — `workspace:`, `catalog:`, npm aliases, git/file/link sources — and packages not found on the registry are skipped and left untouched.
+**pnpm catalogs.** If a `pnpm-workspace.yaml` is found (walking up from the current directory), Siz reads its `catalog:` and `catalogs:` blocks and offers each entry as its own upgrade row, tagged `catalog` (or `catalog:<name>`). Selected entries are rewritten **in `pnpm-workspace.yaml`** — format- and comment-preservingly — so a version is bumped once for the whole workspace. The `catalog:` references inside each `package.json` are deliberately left untouched, since they point at the catalog that just changed. (Yarn and Bun catalogs are not handled yet.)
+
+Specifiers that aren't plain registry ranges — `workspace:`, `catalog:`, npm aliases, git/file/link sources — and packages not found on the registry are skipped and left untouched (the package.json `catalog:` refs are managed via the catalog itself, as described above).
 
 ## Bundles
 
@@ -228,13 +234,6 @@ trackPackage({ name: 'urql', category: suggestCategory({ name: 'urql' }) })
 const agent = await detectPM()
 console.log(formatCommand(buildInstallCommand(agent, ['urql'], { dev: false })))
 ```
-
-## Future plans
-
-Monorepo support is being built out incrementally. `siz upgrade -r` already upgrades every `package.json` in a workspace; still on the roadmap:
-
-- **pnpm catalogs** — upgrade versions declared once under `catalog:` / `catalogs:` in `pnpm-workspace.yaml`, with format-preserving edits, and resolve `catalog:` references accordingly. (Yarn and Bun catalogs to follow.)
-- **Fuller workspace awareness** — honor declared workspace globs, guard against clobbering nested independent workspaces (Taze's `--ignore-other-workspaces`), and reach `pnpm.overrides` / `resolutions`.
 
 ## License
 
