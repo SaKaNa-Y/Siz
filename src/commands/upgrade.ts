@@ -6,7 +6,7 @@ import type { ProjectManifest } from '../core/project.ts'
 import type { UpgradeMode, UpgradePlan, UpgradePlanItem } from '../core/upgrade.ts'
 
 import { buildSyncCommand, detectPM, formatCommand, runInstall } from '../core/pm.ts'
-import { applyRangeEdits, discoverManifests, writeManifest } from '../core/project.ts'
+import { applyRangeEdits, discoverManifests, relativeScope, writeManifest } from '../core/project.ts'
 import { collectQueryNames, fetchVersionInfo, planManifests } from '../core/upgrade.ts'
 import { clack, ensure, pickPackageManager } from '../ui/prompts.ts'
 import {
@@ -80,8 +80,7 @@ export async function runUpgrade(opts: UpgradeOptions = {}): Promise<void> {
       skipped: planned.flatMap((p) => p.plan.skipped),
     }
     flat = planned.flatMap(({ manifest, plan }) => {
-      const dir = dirname(relative(cwd, manifest.path))
-      const scope = dir === '.' || dir === '' ? undefined : dir
+      const scope = relativeScope(cwd, dirname(manifest.path))
       return plan.upgradable.map((item) => ({
         item,
         manifest,
