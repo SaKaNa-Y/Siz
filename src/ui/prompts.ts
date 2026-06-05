@@ -114,7 +114,7 @@ export function buildInstallTargetOptions(
     const name = typeof m.data.name === 'string' ? m.data.name : undefined
     return {
       value: dir,
-      label: name ?? (scope ?? '.'),
+      label: name ?? scope ?? '.',
       hint: scope ?? 'root',
     }
   })

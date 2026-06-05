@@ -204,4 +204,59 @@ describe('discoverManifests', () => {
     mkdirSync(empty)
     expect(await discoverManifests(empty, { recursive: true })).toEqual([])
   })
+
+  it('honors pnpm-workspace.yaml packages globs, excluding stray manifests', async () => {
+    writeFileSync(join(dir, 'pnpm-workspace.yaml'), "packages:\n  - 'packages/*'\n")
+    const stray = join(dir, 'examples', 'demo')
+    mkdirSync(stray, { recursive: true })
+    writeFileSync(join(stray, 'package.json'), '{ "name": "demo" }')
+
+    const found = await discoverManifests(dir, { recursive: true })
+    expect(found.map((m) => m.path)).toEqual([
+      join(dir, 'package.json'),
+      join(dir, 'packages', 'a', 'package.json'),
+      join(dir, 'packages', 'b', 'package.json'),
+    ])
+  })
+
+  it('honors the npm/yarn workspaces field, excluding stray manifests', async () => {
+    writeFileSync(join(dir, 'package.json'), '{ "workspaces": ["packages/*"] }')
+    const stray = join(dir, 'examples', 'demo')
+    mkdirSync(stray, { recursive: true })
+    writeFileSync(join(stray, 'package.json'), '{ "name": "demo" }')
+
+    const found = await discoverManifests(dir, { recursive: true })
+    expect(found.map((m) => m.path)).toEqual([
+      join(dir, 'package.json'),
+      join(dir, 'packages', 'a', 'package.json'),
+      join(dir, 'packages', 'b', 'package.json'),
+    ])
+  })
+
+  it('supports the yarn workspaces object form', async () => {
+    writeFileSync(join(dir, 'package.json'), '{ "workspaces": { "packages": ["packages/a"] } }')
+    const found = await discoverManifests(dir, { recursive: true })
+    expect(found.map((m) => m.path)).toEqual([
+      join(dir, 'package.json'),
+      join(dir, 'packages', 'a', 'package.json'),
+    ])
+  })
+
+  it('supports negation patterns in declared globs', async () => {
+    writeFileSync(
+      join(dir, 'pnpm-workspace.yaml'),
+      "packages:\n  - 'packages/*'\n  - '!packages/b'\n",
+    )
+    const found = await discoverManifests(dir, { recursive: true })
+    expect(found.map((m) => m.path)).toEqual([
+      join(dir, 'package.json'),
+      join(dir, 'packages', 'a', 'package.json'),
+    ])
+  })
+
+  it('returns only the root when a workspace declares no members', async () => {
+    writeFileSync(join(dir, 'pnpm-workspace.yaml'), 'packages: []\n')
+    const found = await discoverManifests(dir, { recursive: true })
+    expect(found.map((m) => m.path)).toEqual([join(dir, 'package.json')])
+  })
 })

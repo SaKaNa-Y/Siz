@@ -2,12 +2,25 @@ import ansis from 'ansis'
 import { dirname, relative } from 'node:path'
 import process from 'node:process'
 
+import type { CatalogManifest } from '../core/catalog.ts'
 import type { ProjectManifest } from '../core/project.ts'
-import type { UpgradeMode, UpgradePlan, UpgradePlanItem } from '../core/upgrade.ts'
+import type { CatalogPlanItem, UpgradeMode, UpgradePlan, UpgradePlanItem } from '../core/upgrade.ts'
 
+import { applyCatalogEdits, discoverCatalog } from '../core/catalog.ts'
 import { buildSyncCommand, detectPM, formatCommand, runInstall } from '../core/pm.ts'
-import { applyRangeEdits, discoverManifests, relativeScope, writeManifest } from '../core/project.ts'
-import { collectQueryNames, fetchVersionInfo, planManifests } from '../core/upgrade.ts'
+import {
+  applyRangeEdits,
+  discoverManifests,
+  relativeScope,
+  writeManifest,
+} from '../core/project.ts'
+import {
+  collectCatalogNames,
+  collectQueryNames,
+  fetchVersionInfo,
+  planCatalog,
+  planManifests,
+} from '../core/upgrade.ts'
 import { clack, ensure, pickPackageManager } from '../ui/prompts.ts'
 import {
   renderUpgradeSummary,
@@ -31,14 +44,34 @@ function itemKey(item: { depType: string; name: string }): string {
   return `${item.depType}:${item.name}`
 }
 
-/** One upgradable dep tagged with the manifest it belongs to. */
-interface FlatItem {
+/** One upgradable package.json dep tagged with the manifest it belongs to. */
+interface ManifestRow {
+  kind: 'manifest'
   item: UpgradePlanItem
   manifest: ProjectManifest
   /** Package dir relative to cwd (e.g. `packages/ui`), or undefined for the root. */
   scope?: string
-  /** Globally-unique multiselect value across all manifests. */
+  /** Globally-unique multiselect value across all rows. */
   key: string
+}
+
+/** One upgradable pnpm catalog entry tagged with its workspace file. */
+interface CatalogRow {
+  kind: 'catalog'
+  item: CatalogPlanItem
+  catalog: CatalogManifest
+  /** Display tag: `catalog` for the default block, else `catalog:<name>`. */
+  scope: string
+  /** Globally-unique multiselect value across all rows. */
+  key: string
+}
+
+/** A single selectable upgrade row — either a manifest dep or a catalog entry. */
+type FlatItem = ManifestRow | CatalogRow
+
+/** Catalog edit key within one pnpm-workspace.yaml: `${catalog}:${name}`. */
+function catalogKey(item: CatalogPlanItem): string {
+  return `${item.catalog}:${item.name}`
 }
 
 /**
@@ -54,13 +87,18 @@ export async function runUpgrade(opts: UpgradeOptions = {}): Promise<void> {
   clack.intro(ansis.bold.cyan('siz upgrade'))
 
   const manifests = await discoverManifests(cwd, { recursive: opts.recursive })
-  if (manifests.length === 0) {
+  // pnpm catalogs live in the nearest pnpm-workspace.yaml (workspace-global), so
+  // discover them by walking up regardless of recursive mode.
+  const catalog = discoverCatalog(cwd)
+  if (manifests.length === 0 && !catalog) {
     clack.log.error('No package.json found in this directory.')
     clack.outro('Nothing to upgrade.')
     return
   }
 
-  const queryNames = collectQueryNames(manifests)
+  const queryNames = [
+    ...new Set([...collectQueryNames(manifests), ...(catalog ? collectCatalogNames(catalog) : [])]),
+  ]
   if (queryNames.length === 0) {
     clack.log.info('No upgradable dependencies found.')
     clack.outro('Nothing to upgrade.')
@@ -74,20 +112,32 @@ export async function runUpgrade(opts: UpgradeOptions = {}): Promise<void> {
   try {
     const versions = await fetchVersionInfo(queryNames)
     const planned = planManifests(manifests, versions, mode)
+    const catalogItems = catalog ? planCatalog(catalog, versions, mode) : []
     aggregate = {
-      upgradable: planned.flatMap((p) => p.plan.upgradable),
+      upgradable: [...planned.flatMap((p) => p.plan.upgradable), ...catalogItems],
       upToDate: planned.flatMap((p) => p.plan.upToDate),
       skipped: planned.flatMap((p) => p.plan.skipped),
     }
-    flat = planned.flatMap(({ manifest, plan }) => {
+    const manifestRows: FlatItem[] = planned.flatMap(({ manifest, plan }) => {
       const scope = relativeScope(cwd, dirname(manifest.path))
       return plan.upgradable.map((item) => ({
+        kind: 'manifest' as const,
         item,
         manifest,
         scope,
         key: `${relative(cwd, manifest.path)} ${itemKey(item)}`,
       }))
     })
+    const catalogRows: FlatItem[] = catalog
+      ? catalogItems.map((item) => ({
+          kind: 'catalog' as const,
+          item,
+          catalog,
+          scope: item.catalog === 'default' ? 'catalog' : `catalog:${item.catalog}`,
+          key: `${relative(cwd, catalog.path)} ${catalogKey(item)}`,
+        }))
+      : []
+    flat = [...manifestRows, ...catalogRows]
   } catch (err) {
     spin.stop('Failed to check for updates.')
     clack.log.error((err as Error).message)
@@ -104,7 +154,7 @@ export async function runUpgrade(opts: UpgradeOptions = {}): Promise<void> {
   const options = flat.map((f) => ({
     value: f.key,
     label: upgradeOptionLabel(f.item, f.scope),
-    hint: f.item.depType === 'devDependencies' ? 'dev' : undefined,
+    hint: f.kind === 'manifest' && f.item.depType === 'devDependencies' ? 'dev' : undefined,
   }))
   const selected = ensure(
     await clack.multiselect<string>({
@@ -132,9 +182,13 @@ export async function runUpgrade(opts: UpgradeOptions = {}): Promise<void> {
   const syncCmd = buildSyncCommand(agent)
   const styled = ansis.cyan(formatCommand(syncCmd))
   const count = `${chosen.length} package${chosen.length === 1 ? '' : 's'}`
+  const where = describeFiles(
+    new Set(chosen.filter((f) => f.kind === 'manifest').map((f) => f.manifest.path)).size,
+    new Set(chosen.filter((f) => f.kind === 'catalog').map((f) => f.catalog.path)).size,
+  )
   const ok = ensure(
     await clack.confirm({
-      message: `Update ${count} in package.json and run ${styled}?`,
+      message: `Update ${count} in ${where} and run ${styled}?`,
       initialValue: true,
     }),
   )
@@ -143,26 +197,35 @@ export async function runUpgrade(opts: UpgradeOptions = {}): Promise<void> {
     return
   }
 
-  // Group selections back by their manifest, then rewrite each file once.
-  const byManifest = new Map<string, FlatItem[]>()
+  // Group selections back by their file, then rewrite each once. package.json
+  // deps rewrite via applyRangeEdits; catalog entries via applyCatalogEdits.
+  const manifestGroups = new Map<string, { manifest: ProjectManifest; rows: ManifestRow[] }>()
+  const catalogGroups = new Map<string, { catalog: CatalogManifest; rows: CatalogRow[] }>()
   for (const f of chosen) {
-    const group = byManifest.get(f.manifest.path)
-    if (group) group.push(f)
-    else byManifest.set(f.manifest.path, [f])
+    if (f.kind === 'manifest') {
+      const g = manifestGroups.get(f.manifest.path)
+      if (g) g.rows.push(f)
+      else manifestGroups.set(f.manifest.path, { manifest: f.manifest, rows: [f] })
+    } else {
+      const g = catalogGroups.get(f.catalog.path)
+      if (g) g.rows.push(f)
+      else catalogGroups.set(f.catalog.path, { catalog: f.catalog, rows: [f] })
+    }
   }
 
   try {
-    for (const group of byManifest.values()) {
-      const { manifest } = group[0]
-      const edits = new Map(group.map((f) => [itemKey(f.item), f.item.proposed]))
+    for (const { manifest, rows } of manifestGroups.values()) {
+      const edits = new Map(rows.map((f) => [itemKey(f.item), f.item.proposed]))
       writeManifest(manifest.path, applyRangeEdits(manifest.raw, edits))
     }
+    for (const { catalog: cat, rows } of catalogGroups.values()) {
+      const edits = new Map(rows.map((f) => [catalogKey(f.item), f.item.proposed]))
+      writeManifest(cat.path, applyCatalogEdits(cat.raw, edits))
+    }
   } catch (err) {
-    clack.log.error(`Failed to update package.json: ${(err as Error).message}`)
+    clack.log.error(`Failed to update files: ${(err as Error).message}`)
     return
   }
-  const fileCount = byManifest.size
-  const where = fileCount === 1 ? 'package.json' : `${fileCount} package.json files`
   clack.log.success(`Updated ${count} in ${where}`)
 
   clack.log.step(`Installing with ${ansis.bold(agent)}`)
@@ -172,6 +235,16 @@ export async function runUpgrade(opts: UpgradeOptions = {}): Promise<void> {
     return
   }
   clack.outro(ansis.green('Upgraded.'))
+}
+
+/** Human-readable summary of which files were rewritten. */
+function describeFiles(manifestCount: number, catalogCount: number): string {
+  const parts: string[] = []
+  if (manifestCount > 0) {
+    parts.push(manifestCount === 1 ? 'package.json' : `${manifestCount} package.json files`)
+  }
+  if (catalogCount > 0) parts.push('pnpm-workspace.yaml')
+  return parts.join(' and ')
 }
 
 /** Dry-run note body: changes grouped by package, with scope headers when recursive. */

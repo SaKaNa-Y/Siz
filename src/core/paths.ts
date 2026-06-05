@@ -1,5 +1,19 @@
+import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
+
+/** Walk up from `cwd` to the filesystem root, returning the nearest `filename`. */
+export function findUp(filename: string, cwd: string = process.cwd()): string | undefined {
+  let dir = cwd
+  while (dir) {
+    const candidate = join(dir, filename)
+    if (existsSync(candidate)) return candidate
+    const parent = dirname(dir)
+    if (parent === dir) return undefined // reached the filesystem root
+    dir = parent
+  }
+  return undefined
+}
 
 /**
  * Resolve the per-user config directory for Siz.
