@@ -1,5 +1,15 @@
 # @sakana-y/siz
 
+## 0.2.1
+
+### Patch Changes
+
+- [#18](https://github.com/SaKaNa-Y/Siz/pull/18) [`ad80f38`](https://github.com/SaKaNa-Y/Siz/commit/ad80f382acd6b63b1dc63b3a19a143a185a3a09f) Thanks [@SaKaNa-Y](https://github.com/SaKaNa-Y)! - `siz upgrade` now upgrades pnpm catalog versions. When a `pnpm-workspace.yaml` is found (walking up from the current directory), Siz reads its `catalog:` and `catalogs:` blocks and offers each entry as its own upgrade row — tagged `catalog` or `catalog:<name>` — alongside your `package.json` deps. Selected entries are rewritten directly in `pnpm-workspace.yaml`, preserving formatting and comments, so a shared version is bumped once for the whole workspace. The `catalog:` references inside each `package.json` are left untouched, since they point at the catalog that just changed. Works with both the default catalog and named catalogs, and respects the same ceiling semantics (`major | minor | patch | latest`) and `--dry-run` preview as the rest of the upgrade flow. (Yarn and Bun catalogs are not handled yet.)
+
+- [#18](https://github.com/SaKaNa-Y/Siz/pull/18) [`ad80f38`](https://github.com/SaKaNa-Y/Siz/commit/ad80f382acd6b63b1dc63b3a19a143a185a3a09f) Thanks [@SaKaNa-Y](https://github.com/SaKaNa-Y)! - Workspace-aware manifest discovery for `siz upgrade -r` and the install workspace picker. When a workspace is declared — pnpm's `packages:` in `pnpm-workspace.yaml`, or an npm/yarn `workspaces` field (array or `{ packages: [...] }`) — Siz now scans only the declared members (plus the root), instead of every `package.json` under the directory. A stray `package.json` in `examples/`, `fixtures/`, `templates/`, or `docs/` is no longer treated as a workspace member, so it matches what `pnpm`/`npm`/`yarn install` actually link. Negation globs (`!packages/internal/**`) are honored. Repos with no workspace definition keep the previous brute-force behavior, so a plain folder of projects is unaffected.
+
+- [#16](https://github.com/SaKaNa-Y/Siz/pull/16) [`3bf5f61`](https://github.com/SaKaNa-Y/Siz/commit/3bf5f61ff5883f61f617c026393bd11b4c8c9f31) Thanks [@SaKaNa-Y](https://github.com/SaKaNa-Y)! - Install into a specific workspace from interactive search. When you choose **Install** in a monorepo — where more than one `package.json` exists under the current directory (skipping `node_modules`, `dist`, and `.git`) — Siz now asks which package to install into and runs your package manager in that package's directory, so the dependency lands in the right workspace. Projects with a single `package.json` are unaffected (no extra prompt).
+
 ## 0.2.0
 
 ### Minor Changes
