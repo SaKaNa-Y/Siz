@@ -1,7 +1,12 @@
 import type { Agent } from 'package-manager-detector'
 
 import * as p from '@clack/prompts'
+import { dirname } from 'node:path'
+import process from 'node:process'
 
+import type { ProjectManifest } from '../core/project.ts'
+
+import { findPackageJson, relativeScope } from '../core/project.ts'
 import { listBundles } from '../core/store.ts'
 
 /** Abort cleanly if the user cancels a prompt. */
@@ -77,6 +82,66 @@ export async function pickPackageManager(detected: Agent): Promise<Agent> {
         label: agent,
         hint: agent === detected ? 'detected' : undefined,
       })),
+    }),
+  )
+}
+
+/** A selectable install target: a workspace directory plus its display label. */
+export interface InstallTargetOption {
+  /** Absolute directory the package manager should run in. */
+  value: string
+  label: string
+  hint?: string
+}
+
+/**
+ * Build the install-target options for {@link pickInstallTarget}. Pure (no prompt)
+ * so the labelling/ordering is unit-testable. The manifest at `cwd` (the root/nearest
+ * one) is listed first and used as the default; nested manifests are labelled by their
+ * package name with a relative-dir hint.
+ */
+export function buildInstallTargetOptions(
+  manifests: ProjectManifest[],
+  cwd: string = process.cwd(),
+): { options: InstallTargetOption[]; initialValue: string | undefined } {
+  // The directory of the nearest package.json — the natural default target.
+  const nearest = findPackageJson(cwd)
+  const nearestDir = nearest ? dirname(nearest) : cwd
+
+  const options = manifests.map((m): InstallTargetOption => {
+    const dir = dirname(m.path)
+    const scope = relativeScope(cwd, dir)
+    const name = typeof m.data.name === 'string' ? m.data.name : undefined
+    return {
+      value: dir,
+      label: name ?? (scope ?? '.'),
+      hint: scope ?? 'root',
+    }
+  })
+
+  // Root/nearest first so the default sits at the top of the list.
+  options.sort((a, b) => {
+    if (a.value === nearestDir) return -1
+    if (b.value === nearestDir) return 1
+    return a.value.localeCompare(b.value)
+  })
+
+  // After the root-first sort, the nearest manifest (if any) is options[0].
+  const initialValue = options[0]?.value
+  return { options, initialValue }
+}
+
+/** Choose which workspace directory to install into, defaulting to the nearest package.json. */
+export async function pickInstallTarget(
+  manifests: ProjectManifest[],
+  cwd: string = process.cwd(),
+): Promise<string> {
+  const { options, initialValue } = buildInstallTargetOptions(manifests, cwd)
+  return ensure(
+    await p.select<string>({
+      message: 'Install into which package?',
+      initialValue,
+      options,
     }),
   )
 }

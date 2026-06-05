@@ -6,6 +6,7 @@ import type { BundleDepType, BundlePackage, SearchResult, TrackedPackage } from 
 
 import { normalizeCategory, suggestCategory } from '../core/categories.ts'
 import { buildInstallCommands, detectPM, formatCommand, runInstall } from '../core/pm.ts'
+import { discoverManifests, relativeScope } from '../core/project.ts'
 import { parseQuery } from '../core/query.ts'
 import { type SearchMode, searchPackages } from '../core/registry.ts'
 import {
@@ -19,6 +20,7 @@ import { highlightKeywords } from '../ui/highlight.ts'
 import {
   clack,
   ensure,
+  pickInstallTarget,
   pickOrCreateBundle,
   pickPackageManager,
   pickSetAction,
@@ -192,12 +194,20 @@ async function runSetAction(selections: Selection[]): Promise<void> {
       return
 
     case 'install': {
-      const agent = await pickPackageManager(await detectPM())
+      // In a monorepo, let the user pick which package to install into; otherwise
+      // (single package.json) keep installing in the current directory as before.
+      const cwd = process.cwd()
+      const manifests = await discoverManifests(cwd, { recursive: true })
+      const targetDir = manifests.length > 1 ? await pickInstallTarget(manifests, cwd) : cwd
+
+      const agent = await pickPackageManager(await detectPM(targetDir))
       const cmds = buildInstallCommands(agent, selections)
       const styled = cmds.map((c) => ansis.cyan(formatCommand(c)))
+      const scope = relativeScope(cwd, targetDir)
+      const where = scope ? ` in ${ansis.bold(scope)}` : ''
       const ok = ensure(
         await clack.confirm({
-          message: `Run ${styled.join(' && ')}?`,
+          message: `Run ${styled.join(' && ')}${where}?`,
           initialValue: true,
         }),
       )
@@ -209,7 +219,7 @@ async function runSetAction(selections: Selection[]): Promise<void> {
       for (const cmd of cmds) {
         // Run installs sequentially and bail on the first failure (no parallelism).
         // eslint-disable-next-line no-await-in-loop
-        const code = await runInstall(cmd)
+        const code = await runInstall(cmd, targetDir)
         if (code !== 0) {
           clack.log.error(`Install exited with code ${code}`)
           return

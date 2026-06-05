@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
-import { dirname, join, normalize } from 'node:path'
+import { dirname, join, normalize, relative } from 'node:path'
 import process from 'node:process'
 import { glob } from 'tinyglobby'
 
@@ -46,6 +46,12 @@ export function isUpgradableSpecifier(range: string): boolean {
   if (SKIP_PROTOCOL.test(r)) return false
   if (SKIP_TAGS.has(r.toLowerCase())) return false
   return true
+}
+
+/** Relative path from `cwd` to `dir`, or undefined when `dir` IS `cwd` (the root). */
+export function relativeScope(cwd: string, dir: string): string | undefined {
+  const rel = relative(cwd, dir)
+  return rel === '' || rel === '.' ? undefined : rel
 }
 
 /** Walk up from `cwd` to the filesystem root, returning the nearest package.json. */
