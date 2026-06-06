@@ -2,9 +2,9 @@
 
 > **Si**mpler package **z**earch — a smarter npm package search and management CLI.
 
-Siz is a command-line tool for discovering, installing, and organizing npm packages. Open a live search box, multi-select what you need, then install it with your package manager of choice — or favorite and track packages for later. Everything you organize is stored locally and stays safe across upgrades.
+Siz is a command-line tool for discovering, installing, and organizing npm packages. Open a live search box, multi-select what you need, then install it with your package manager of choice — or favorite packages for later. Everything you organize is stored locally and stays safe across upgrades.
 
-Inspired by [`@rizumu/nai`](https://github.com/LittleSound/nai): Siz keeps nai's interactive search-and-install flow, and adds a discovery and organization layer (favorites, categories, a tracked list) around it. It also borrows ideas from antfu's [`ni`](https://github.com/antfu-collective/ni) (package-manager detection and a unified install experience) and [`taze`](https://github.com/antfu-collective/taze) (ceiling-based dependency upgrades).
+Inspired by [`@rizumu/nai`](https://github.com/LittleSound/nai): Siz keeps nai's interactive search-and-install flow, and adds a discovery and organization layer (favorites and categories) around it. It also borrows ideas from antfu's [`ni`](https://github.com/antfu-collective/ni) (package-manager detection and a unified install experience) and [`taze`](https://github.com/antfu-collective/taze) (ceiling-based dependency upgrades).
 
 ## Features
 
@@ -14,7 +14,7 @@ A check mark means the feature ships today; an empty box means it is planned.
 - [x] Full-text search across name and description (`siz search`)
 - [x] GitHub-style qualifiers in queries (`keyword:` `author:` `scope:` `category:` `tag:`)
 - [x] Install via your package manager (npm / pnpm / yarn / bun / deno) — pick it at install time, with a per-package dependency vs devDependency toggle
-- [x] Favorite, categorize, and track packages in a local list
+- [x] Favorite and categorize packages in a local list
 - [x] Heuristic auto-categorization when you add a package
 - [x] Upgrade project dependencies with ceiling semantics and `--dry-run`
 - [x] Safe local data store (user config dir, non-destructive migrations, atomic writes)
@@ -56,16 +56,16 @@ siz vite
 # Full-text search, including package descriptions
 siz search vite
 
-# Track packages you already use
+# Favorite packages you already use
 siz add lodash zod vitest
 
 # Group packages into a reusable bundle, then install it anywhere
 siz add react vue --bundle my-stack
 siz bundle install my-stack
 
-# Organize them
-siz fav zod
-siz list --fav
+# Browse your favorites, filter by category
+siz list
+siz list --category Testing
 
 # Upgrade this project's dependencies
 siz upgrade minor
@@ -100,11 +100,11 @@ Inside the box:
 
 After you confirm a selection, Siz shows an action menu for the chosen packages:
 
-- **Install** — detects your package manager (npm / pnpm / yarn / bun / deno via [`package-manager-detector`](https://github.com/antfu-collective/package-manager-detector), part of the [`ni`](https://github.com/antfu-collective/ni) project) and lets you confirm or switch it at install time. Each package carries a `[dep]` / `[dev]` badge you flip with `Ctrl+T` in the search box; mixed selections run as separate `add` / `add -D` commands. Siz shows the exact command(s) for confirmation, then runs them, and offers to track the packages afterwards. In a monorepo — when more than one `package.json` is found under the current directory (skipping `node_modules`, `dist`, and `.git`) — Siz first asks **which package to install into** and runs the package manager in that package's directory, so the dependency lands in the right workspace. With a single `package.json`, there's no extra prompt.
-- **Favorite**, **Track** — add the packages to your local list.
+- **Install** — detects your package manager (npm / pnpm / yarn / bun / deno via [`package-manager-detector`](https://github.com/antfu-collective/package-manager-detector), part of the [`ni`](https://github.com/antfu-collective/ni) project) and lets you confirm or switch it at install time. Each package carries a `[dep]` / `[dev]` badge you flip with `Ctrl+T` in the search box; mixed selections run as separate `add` / `add -D` commands. Siz shows the exact command(s) for confirmation, then runs them. In a monorepo — when more than one `package.json` is found under the current directory (skipping `node_modules`, `dist`, and `.git`) — Siz first asks **which package to install into** and runs the package manager in that package's directory, so the dependency lands in the right workspace. With a single `package.json`, there's no extra prompt.
+- **Favorite** — add the packages to your favorites list.
 - **Add to bundle** — save the selection to a reusable bundle.
 
-Pressing **Enter** on an empty box (nothing typed) opens your tracked list instead, so your curated packages are the front door — select any and run the same action menu.
+Pressing **Enter** on an empty box (nothing typed) opens your favorites instead, so your curated packages are the front door — select any and run the same action menu.
 
 ### Non-interactive output
 
@@ -146,7 +146,7 @@ Specifiers that aren't plain registry ranges — `workspace:`, `catalog:`, npm a
 
 A **bundle** is a reusable, named collection of packages you can install in one step — handy for the stack you reach for on every new project.
 
-Record packages into a bundle as you track them:
+Record packages straight into a bundle with `--bundle` (this records into the bundle rather than favoriting):
 
 ```bash
 # Add packages straight into a bundle (created if it doesn't exist)
@@ -154,7 +154,7 @@ siz add react react-dom --bundle my-stack
 siz add vitest --bundle my-stack -D     # -D / --dev records it as a devDependency
 ```
 
-Without `--bundle`, `siz add` offers an interactive "Add to a bundle?" picker on a TTY, so you can skip, create a new bundle, or pick an existing one.
+Without `--bundle`, `siz add` favorites the packages instead (see [Favorites](#favorites)).
 
 Then manage and install bundles:
 
@@ -174,20 +174,18 @@ siz bundle rm my-stack          # delete (after confirmation)
 | ----------------------------------------------------- | -------------------------------------------------------------------------- |
 | `siz` / `siz <query>`                                 | Open the live search box, searching by name                                |
 | `siz search <query>`                                  | Full-text search, including package descriptions                           |
-| `siz add <pkg...>`                                    | Track package(s) manually; resolves version and suggests a category        |
-| `siz add <pkg...> --bundle <name>`                    | Track and record packages into a bundle (`-D` / `--dev` for devDependencies) |
+| `siz add <pkg...>`                                    | Favorite package(s); resolves version and suggests a category              |
+| `siz add <pkg...> --bundle <name>`                    | Record packages into a bundle instead of favoriting (`-D` / `--dev` for devDependencies) |
 | `siz bundle <list \| install \| show \| rm \| rename>` | Manage preset bundles (e.g. `siz bundle install my-stack`)                 |
 | `siz upgrade [level]` / `siz up`                      | Upgrade this project's dependencies (`major` \| `minor` \| `patch` \| `latest`) |
-| `siz list` / `siz ls`                                 | List tracked packages                                                      |
-| `siz fav <pkg>` / `siz unfav <pkg>`                   | Toggle favorite                                                            |
-| `siz rm <pkg>`                                        | Untrack a package                                                          |
+| `siz list` / `siz ls`                                 | List favorited packages                                                    |
+| `siz rm <pkg>`                                        | Remove a favorite                                                          |
 | `siz help` / `siz --help`                             | Show help                                                                  |
 | `siz version` / `siz --version`                       | Show the installed version                                                 |
 
 `siz list` filters:
 
 ```bash
-siz list --fav                 # favorites only
 siz list --category Testing    # by category
 ```
 
@@ -199,18 +197,7 @@ Siz ships with a starter set of categories and auto-suggests one when you add a 
 
 ### Favorites
 
-Mark packages you reach for often with `siz fav`. Favorites are surfaced first in `siz list` and marked accordingly.
-
-## Data storage
-
-All of your favorites and tracked packages are stored in a single JSON file in your user config directory — outside the installed package:
-
-- **Linux / macOS:** `$XDG_CONFIG_HOME/siz/data.json` (defaults to `~/.config/siz/data.json`)
-- **Windows:** `%APPDATA%\siz\data.json`
-
-Because this file lives in your home directory, updating or reinstalling Siz never touches it. The file also carries a schema `version`, and Siz applies non-destructive migrations on load: new versions only add fields and never drop your packages, favorites, or any unknown keys. Writes are atomic (temp file plus rename) to avoid corruption.
-
-You can safely run `npm i -g @sakana-y/siz@latest` — your data stays put.
+Favorite the packages you reach for often with `siz add <pkg>`, or with the **Favorite** action after a search. They show up in `siz list` (alphabetically), and pressing **Enter** on an empty search box opens them as the front door. Remove one with `siz rm <pkg>`.
 
 ## Library usage
 
@@ -219,8 +206,8 @@ Siz also exposes its core as a library:
 ```ts
 import {
   searchPackages,
-  listPackages,
-  trackPackage,
+  listFavorites,
+  addFavorite,
   suggestCategory,
   detectPM,
   buildInstallCommand,
@@ -228,7 +215,7 @@ import {
 } from '@sakana-y/siz'
 
 const results = await searchPackages('graphql client')
-trackPackage({ name: 'urql', category: suggestCategory({ name: 'urql' }) })
+addFavorite({ name: 'urql', category: suggestCategory({ name: 'urql' }) })
 
 // Build the right install command for the current project's package manager.
 const agent = await detectPM()

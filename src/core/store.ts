@@ -3,18 +3,18 @@ import type { Agent } from 'package-manager-detector'
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 
-import type { Bundle, BundlePackage, SizData, TrackedPackage } from './types.ts'
+import type { Bundle, BundlePackage, FavoritePackage, SizData } from './types.ts'
 
 import { getDataFile } from './paths.ts'
 
 /** Current schema version. Bump when adding a migration step below. */
-export const CURRENT_VERSION = 2
+export const CURRENT_VERSION = 3
 
 const SCHEMA_HINT = 'https://github.com/siz-cli/siz/schema.json'
 
-/** A fresh, default-initialized package record. */
-function newPackage(name: string): TrackedPackage {
-  return { name, addedAt: new Date().toISOString(), favorite: false }
+/** A fresh, default-initialized favorite record. */
+function newFavorite(name: string): FavoritePackage {
+  return { name, addedAt: new Date().toISOString() }
 }
 
 /** A fresh, default-initialized bundle record. */
@@ -27,7 +27,7 @@ export function emptyData(): SizData {
   return {
     $schema: SCHEMA_HINT,
     version: CURRENT_VERSION,
-    packages: {},
+    favorites: {},
     bundles: {},
     settings: {},
   }
@@ -36,36 +36,36 @@ export function emptyData(): SizData {
 /**
  * Migrate raw on-disk data up to CURRENT_VERSION.
  *
- * IMPORTANT: every step is *non-destructive*. We only add or transform fields
- * and never drop tracked packages, favorites, or unknown keys. This is
- * what guarantees user data survives Siz upgrades.
+ * IMPORTANT: every step is *non-destructive*. We only add, rename, or transform
+ * fields and never drop a stored package or unknown keys. This is what
+ * guarantees user data survives Siz upgrades.
  */
 export function migrate(raw: unknown): SizData {
   // Start from a defensive shallow copy of whatever we were given.
   const data: Record<string, unknown> =
     raw && typeof raw === 'object' ? { ...(raw as Record<string, unknown>) } : {}
 
-  // Ensure the core containers exist without clobbering existing values.
+  // Ensure the core containers exist without clobbering existing values. Older
+  // files (<= v2) keep their packages under `packages`; v3+ uses `favorites`.
   if (typeof data.version !== 'number') data.version = 0
   if (!data.packages || typeof data.packages !== 'object') data.packages = {}
   if (!data.bundles || typeof data.bundles !== 'object') data.bundles = {}
   if (!data.settings || typeof data.settings !== 'object') data.settings = {}
 
-  const packages = data.packages as Record<string, Partial<TrackedPackage>>
+  const packages = data.packages as Record<string, Record<string, unknown>>
 
   // --- Step: v0 -> v1 -------------------------------------------------------
-  // Normalize each package to the full TrackedPackage shape, filling defaults
-  // for fields that did not exist in older versions. Never remove a package.
+  // Normalize each package, filling required fields that did not exist in older
+  // versions. Never remove a package.
   if ((data.version as number) < 1) {
     for (const [name, pkg] of Object.entries(packages)) {
-      const p = (pkg && typeof pkg === 'object' ? pkg : {}) as Partial<TrackedPackage>
+      const p = (pkg && typeof pkg === 'object' ? pkg : {}) as Record<string, unknown>
       packages[name] = {
         // Preserve any extra/unknown per-package fields first...
         ...p,
         // ...then guarantee the required fields exist.
-        name: p.name ?? name,
+        name: typeof p.name === 'string' ? p.name : name,
         addedAt: typeof p.addedAt === 'string' ? p.addedAt : new Date(0).toISOString(),
-        favorite: typeof p.favorite === 'boolean' ? p.favorite : false,
       }
     }
     data.version = 1
@@ -76,6 +76,24 @@ export function migrate(raw: unknown): SizData {
   // initialized it when missing, so older files simply gain an empty map.
   if ((data.version as number) < 2) {
     data.version = 2
+  }
+
+  // --- Step: v2 -> v3 -------------------------------------------------------
+  // Collapse the two-tier track/favorite model into a single favorites list:
+  // rename `packages` -> `favorites` (every former tracked package becomes a
+  // favorite) and drop the now-defunct per-package `favorite` boolean. Never
+  // drop an entry or any other field. Idempotent: skip if `favorites` exists.
+  if ((data.version as number) < 3) {
+    if (!data.favorites || typeof data.favorites !== 'object') {
+      const favorites: Record<string, Record<string, unknown>> = {}
+      for (const [name, pkg] of Object.entries(packages)) {
+        const { favorite: _drop, ...rest } = pkg
+        favorites[name] = rest
+      }
+      data.favorites = favorites
+    }
+    delete data.packages
+    data.version = 3
   }
 
   // Future migrations go here, each guarded by `if (data.version < N)`.
@@ -123,70 +141,53 @@ function withData<T>(file: string | undefined, fn: (data: SizData) => T): T {
   return result
 }
 
-export function trackPackage(
+export function addFavorite(
   pkg: { name: string; version?: string; category?: string },
   file?: string,
-): TrackedPackage {
+): FavoritePackage {
   return withData(file, (data) => {
-    const existing = data.packages[pkg.name]
+    const existing = data.favorites[pkg.name]
     if (existing) {
-      // Update version/category without discarding favorites.
+      // Refresh version/category without discarding existing metadata.
       if (pkg.version) existing.version = pkg.version
       if (pkg.category && !existing.category) existing.category = pkg.category
       return existing
     }
-    const created: TrackedPackage = {
-      ...newPackage(pkg.name),
+    const created: FavoritePackage = {
+      ...newFavorite(pkg.name),
       ...(pkg.version ? { version: pkg.version } : {}),
       ...(pkg.category ? { category: pkg.category } : {}),
     }
-    data.packages[pkg.name] = created
+    data.favorites[pkg.name] = created
     return created
   })
 }
 
-export function setFavorite(name: string, favorite: boolean, file?: string): TrackedPackage {
+export function setCategory(name: string, category: string, file?: string): FavoritePackage {
   return withData(file, (data) => {
-    const pkg = (data.packages[name] ??= newPackage(name))
-    pkg.favorite = favorite
-    return pkg
-  })
-}
-
-export function setCategory(name: string, category: string, file?: string): TrackedPackage {
-  return withData(file, (data) => {
-    const pkg = (data.packages[name] ??= newPackage(name))
+    const pkg = (data.favorites[name] ??= newFavorite(name))
     pkg.category = category
     return pkg
   })
 }
 
-export function untrack(name: string, file?: string): boolean {
+export function removeFavorite(name: string, file?: string): boolean {
   return withData(file, (data) => {
-    if (!data.packages[name]) return false
-    delete data.packages[name]
+    if (!data.favorites[name]) return false
+    delete data.favorites[name]
     return true
   })
 }
 
-/** Sort tracked packages favorites-first, then alphabetically by name. */
-export function sortByFavoriteThenName(pkgs: TrackedPackage[]): TrackedPackage[] {
-  return pkgs.toSorted((a, b) =>
-    a.favorite !== b.favorite ? (a.favorite ? -1 : 1) : a.name.localeCompare(b.name),
-  )
-}
-
-/** List tracked packages with optional filters. */
-export function listPackages(
-  filters: { category?: string; favorite?: boolean } = {},
+/** List favorited packages, sorted alphabetically by name, with optional filters. */
+export function listFavorites(
+  filters: { category?: string } = {},
   file?: string,
-): TrackedPackage[] {
+): FavoritePackage[] {
   const data = loadData(file ?? getDataFile())
-  return Object.values(data.packages).filter((p) => {
-    if (filters.favorite && !p.favorite) return false
-    if (filters.category && p.category !== filters.category) return false
-    return true
-  })
+  return Object.values(data.favorites)
+    .filter((p) => !filters.category || p.category === filters.category)
+    .toSorted((a, b) => a.name.localeCompare(b.name))
 }
 
 // --- Bundle mutators ---------------------------------------------------------

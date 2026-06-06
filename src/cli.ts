@@ -15,7 +15,6 @@ import {
   runBundleRename,
   runBundleShow,
 } from './commands/bundle.ts'
-import { runFavorite } from './commands/favorite.ts'
 import { runInteractive } from './commands/interactive.ts'
 import { runList } from './commands/list.ts'
 import { runRemove } from './commands/remove.ts'
@@ -55,8 +54,11 @@ cli
 const ADD_STRATEGIES = ['latest', 'exact', 'caret', 'tilde'] as const
 
 cli
-  .command('add <package> [...packages]', 'Track package(s) manually')
-  .option('-b, --bundle <name>', 'Also record packages into a named bundle')
+  .command(
+    'add <package> [...packages]',
+    'Favorite package(s) (use --bundle to add to a bundle instead)',
+  )
+  .option('-b, --bundle <name>', 'Record packages into a named bundle instead of favoriting')
   .option('-D, --dev', 'Record bundle entries as devDependencies')
   .option(
     '-s, --strategy <strategy>',
@@ -131,22 +133,14 @@ cli
   })
 
 cli
-  .command('list', 'List tracked packages')
+  .command('list', 'List favorited packages')
   .alias('ls')
   .option('-c, --category <category>', 'Filter by category')
-  .option('-f, --fav', 'Show favorites only')
-  .action((opts: { category?: string; fav?: boolean }) => {
-    runList({ category: opts.category, fav: opts.fav })
+  .action((opts: { category?: string }) => {
+    runList({ category: opts.category })
   })
 
-cli
-  .command('fav <package>', 'Mark a package as favorite')
-  .action((pkg: string) => runFavorite(pkg, true))
-cli
-  .command('unfav <package>', 'Remove favorite mark')
-  .action((pkg: string) => runFavorite(pkg, false))
-
-cli.command('rm <package>', 'Untrack a package').action((pkg: string) => runRemove(pkg))
+cli.command('rm <package>', 'Remove a favorite').action((pkg: string) => runRemove(pkg))
 
 // Render the full program help (the default command's), not the `help` command's own usage.
 cli.command('help', 'Show this help message').action(() => defaultCommand.outputHelp())
@@ -160,7 +154,7 @@ const EXAMPLES = [
   'siz add zod --strategy exact --bundle my-stack',
   'siz bundle install my-stack',
   'siz upgrade minor',
-  'siz list --fav',
+  'siz list --category Testing',
 ]
 
 cli.help((sections) => {
@@ -175,6 +169,8 @@ cli.help((sections) => {
   return trimmed
 })
 cli.version(packageJson.version)
+// cac's default outputVersion appends platform/runtime info; print just the version.
+cli.outputVersion = () => console.log(packageJson.version)
 
 async function main() {
   try {
