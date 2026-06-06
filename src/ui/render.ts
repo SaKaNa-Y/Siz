@@ -1,6 +1,6 @@
 import ansis from 'ansis'
 
-import type { SearchResult, TrackedPackage } from '../core/types.ts'
+import type { FavoritePackage, SearchResult } from '../core/types.ts'
 
 import { suggestCategory } from '../core/categories.ts'
 
@@ -22,15 +22,10 @@ export function categoryLabel(r: SearchResult): string {
 /** Render one search result as a multi-line card. */
 export function renderSearchResult(
   r: SearchResult,
-  state: { tracked?: boolean; favorite?: boolean; showDescription?: boolean } = {},
+  state: { favorite?: boolean; showDescription?: boolean } = {},
 ): string {
   const { showDescription = true } = state
-  const marks = [
-    state.favorite ? ansis.red('fav') : '',
-    state.tracked ? ansis.cyan('• tracked') : '',
-  ]
-    .filter(Boolean)
-    .join(' ')
+  const marks = state.favorite ? ansis.red('★ fav') : ''
 
   const label = categoryLabel(r)
   const header = `${label ? `${label} ` : ''}${ansis.bold.cyan(r.name)} ${ansis.dim(`v${r.version}`)}${marks ? `  ${marks}` : ''}`
@@ -51,11 +46,10 @@ export function renderSearchResult(
   return [header, desc, keywords, quality].filter(Boolean).join('\n')
 }
 
-/** Render a tracked package as a compact one-liner for `siz list`. */
-export function renderTrackedLine(p: TrackedPackage): string {
-  const mark = p.favorite ? ansis.red('fav') : '   '
+/** Render a favorited package as a compact one-liner for `siz list`. */
+export function renderFavoriteLine(p: FavoritePackage): string {
   const name = ansis.bold(p.name)
   const version = p.version ? ansis.dim(` v${p.version}`) : ''
   const category = p.category ? ` ${ansis.magenta(`[${p.category}]`)}` : ''
-  return `${mark} ${name}${version}${category}`
+  return `${ansis.red('★')} ${name}${version}${category}`
 }

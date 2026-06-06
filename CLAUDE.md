@@ -2,15 +2,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-`siz` is a CLI for searching, favoriting and tracking npm packages. It ships both as a binary (`siz`) and as a library (importable from the package root). Package manager is **pnpm** (`pnpm@10.24.0`), Node `>=20.19.0`, ESM-only TypeScript.
+`siz` is a CLI for searching, favoriting and installing npm packages. It ships both as a binary (`siz`) and as a library (importable from the package root). Package manager is **pnpm** (`pnpm@10.24.0`), Node `>=20.19.0`, ESM-only TypeScript.
 
 ## CLI (`siz -h`)
 
 The command surface is defined entirely by the `cac` registrations in `src/cli.ts` — that file is the single source of truth. The top-level help (`siz -h`) currently renders as below; the `siz/<version>` line is dynamic (sourced from `package.json`), and per-command options (e.g. `siz add --help`) are listed only under that command's own help.
 
 ```
-siz/0.2.0
-Smarter npm package search & management CLI — search, favorite and track packages.
+siz/0.2.1
+Smarter npm package search & management CLI — search, favorite and install packages.
 
 Usage:
   $ siz [...query]
@@ -18,13 +18,11 @@ Usage:
 Commands:
   [...query]                     Search npm packages by name (use qualifiers like keyword:cli)
   search [...query]              Full-text search including package descriptions
-  add <package> [...packages]    Track package(s) manually
+  add <package> [...packages]    Favorite package(s) (use --bundle to add to a bundle instead)
   bundle <action> [arg1] [arg2]  Manage preset bundles
   upgrade [level]                Upgrade project dependencies (level: major | minor | patch | latest)
-  list                           List tracked packages
-  fav <package>                  Mark a package as favorite
-  unfav <package>                Remove favorite mark
-  rm <package>                   Untrack a package
+  list                           List favorited packages
+  rm <package>                   Remove a favorite
   help                           Show this help message
   version                        Show the installed version
 
@@ -43,7 +41,7 @@ Examples:
   $ siz add zod --strategy exact --bundle my-stack
   $ siz bundle install my-stack
   $ siz upgrade minor
-  $ siz list --fav
+  $ siz list --category Testing
 ```
 
 **Rule:** whenever a command, option, flag, alias, or example is added, changed, or removed in `src/cli.ts`, update this help block (and the relevant per-command help) to match — `siz -h` is part of the public surface and must never drift from the code.
@@ -97,9 +95,9 @@ Three layers, top to bottom: **Commands** orchestrate flow → **Core** holds lo
 **Entry / routing** — `src/cli.ts` uses `cac` to register subcommands and dispatch to `src/commands/*`:
 
 - bare `siz [query]` → `commands/interactive.ts` (name search; or `commands/search.ts` for `--list` / `--json`); `search [query]` is the same flow over descriptions (full-text)
-- `add <package…>` → `commands/add.ts`; `-b/--bundle <name>` also records into a bundle, `-D/--dev` marks bundle entries as devDependencies, `-s/--strategy <latest|exact|caret|tilde>` (validated in `cli.ts`, default `caret`) sets the recorded version strategy
+- `add <package…>` → `commands/add.ts`; favorites the package(s) by default. With `-b/--bundle <name>` it instead records them into that bundle (and does **not** favorite), `-D/--dev` marks bundle entries as devDependencies, `-s/--strategy <latest|exact|caret|tilde>` (validated in `cli.ts`, default `caret`) sets the recorded version strategy
 - `bundle <action> [arg1] [arg2]` → `commands/bundle.ts`; cac matches on the leading token, so one command dispatches on `action`: `list`/`ls`, `install <name>`, `show <name>`, `rm <name>`, `rename <old> <new>`
-- `list`/`ls`, `fav`/`unfav`, `rm`
+- `list`/`ls` (favorites; `-c/--category` filter), `rm` (remove a favorite)
 - `upgrade [level]` / `up` (alias) → `commands/upgrade.ts`; `level` is `major | minor | patch | latest` (validated in `cli.ts`, defaults to `latest`); `-r/--recursive` discovers every `package.json` under cwd (monorepo mode); `--dry-run` previews without writing or installing
 - `help`, `version` — thin subcommands that reuse cac's built-in `outputHelp()` / `outputVersion()`; the version is sourced from `package.json` (imported), which also backs the `--version` flag
 
@@ -111,7 +109,7 @@ Three layers, top to bottom: **Commands** orchestrate flow → **Core** holds lo
 
 - `registry.ts` — npm registry search + name/description filtering (fzf) + qualifier handling
 - `query.ts` — parses qualifiers: `keyword:`, `author:`, `scope:`, `category:`, `tag:` (`tag:`/`tags:` is an alias of `keyword:` — folded into npm's native `keywords:` search)
-- `store.ts` — JSON persistence in the user config dir, non-destructive migrations, and tracking/favorite mutators
+- `store.ts` — JSON persistence in the user config dir, non-destructive migrations (schema v3: a single `favorites` map, no two-tier track/favorite), and favorite mutators (`addFavorite`, `removeFavorite`, `listFavorites`, `setCategory`)
 - `categories.ts` — heuristic categorization (Frontend, Backend, Testing, …) from name/description/keywords
 - `pm.ts` — detect npm/pnpm/yarn/bun/deno and build install commands (incl. dev deps) and the sync/install command (`buildSyncCommand`, `runInstall`) used by upgrade; uses `package-manager-detector`
 - `meta.ts` — fast version resolution via `fast-npm-meta`
@@ -119,10 +117,10 @@ Three layers, top to bottom: **Commands** orchestrate flow → **Core** holds lo
 - `upgrade.ts` — analyze each dep against registry versions and build an upgrade plan with ceiling semantics (`UpgradeMode`); `collectQueryNames()`/`planManifests()` extend this across multiple manifests (`ManifestPlan`); `planCatalog()`/`collectCatalogNames()` do the same for pnpm catalog entries (`CatalogPlanItem`); types `DepAnalysis`, `UpgradePlan`, `VersionInfo`
 - `catalog.ts` — locate the nearest `pnpm-workspace.yaml` (`discoverCatalog`), parse its `catalog:` / `catalogs:` blocks into `CatalogEntry[]` (via the `yaml` parser), and rewrite catalog versions in place with indentation-scoped, format-preserving string edits (`applyCatalogEdits`); `readWorkspacePackages()` exposes the file's `packages:` globs for manifest discovery
 - `paths.ts` — config dir resolution (Windows `%APPDATA%\siz`, Unix `~/.config/siz`)
-- `types.ts` — shared interfaces: `TrackedPackage`, `SizData`, `SearchResult`
+- `types.ts` — shared interfaces: `FavoritePackage`, `SizData`, `SearchResult`
 
-**UI** (`src/ui/`): `render.ts` (score bars, category labels, result/tracked cards), `search-prompt.ts` (type-as-you-search multiselect), `prompts.ts` (`@clack/prompts` confirm/action menus, package-manager picker), `upgrade-render.ts` (upgrade summary line, version deltas, option labels), `highlight.ts` (keyword highlighting). Color via `ansis`.
+**UI** (`src/ui/`): `render.ts` (score bars, category labels, result/favorite cards), `search-prompt.ts` (type-as-you-search multiselect), `prompts.ts` (`@clack/prompts` confirm/action menus, package-manager picker), `upgrade-render.ts` (upgrade summary line, version deltas, option labels), `highlight.ts` (keyword highlighting). Color via `ansis`.
 
-**Library surface** — `src/index.ts` re-exports core functions (`searchPackages`, `trackPackage`, `detectPM`, `buildInstallCommand`, `listPackages`, the `project.ts`/`upgrade.ts`/`catalog.ts` upgrade functions and types, …). Keep it in sync when core signatures change.
+**Library surface** — `src/index.ts` re-exports core functions (`searchPackages`, `addFavorite`, `detectPM`, `buildInstallCommand`, `listFavorites`, the `project.ts`/`upgrade.ts`/`catalog.ts` upgrade functions and types, …). Keep it in sync when core signatures change.
 
 **Data store** — persisted to `data.json` in the config dir (`%APPDATA%\siz\data.json` on Windows, `~/.config/siz/data.json` on Unix). Tests under `test/*.test.ts` mirror the core modules.

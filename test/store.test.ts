@@ -5,19 +5,18 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
 import {
   CURRENT_VERSION,
+  addFavorite,
   addToBundle,
   getBundle,
   listBundles,
-  listPackages,
+  listFavorites,
   loadData,
   migrate,
   removeBundle,
+  removeFavorite,
   removeFromBundle,
   renameBundle,
-  setFavorite,
   touchBundle,
-  trackPackage,
-  untrack,
   upsertBundle,
 } from '../src/core/store.ts'
 
@@ -34,9 +33,10 @@ afterEach(() => {
 })
 
 describe('migration is non-destructive (update-safety constraint)', () => {
-  it('preserves every tracked package, favorite, and unknown field from an older file', () => {
+  it('preserves every stored package and unknown field from an older file', () => {
     // Simulate a v0 data file written by an older Siz version, with extra
-    // fields we have never seen before.
+    // fields we have never seen before. Pre-v3 files kept packages under
+    // `packages` with a `favorite` boolean.
     const legacy = {
       version: 0,
       packages: {
@@ -51,34 +51,37 @@ describe('migration is non-destructive (update-safety constraint)', () => {
 
     const data = loadData(file)
 
-    // Schema bumped.
+    // Schema bumped, and packages moved under `favorites`.
     expect(data.version).toBe(CURRENT_VERSION)
+    expect((data as Record<string, unknown>).packages).toBeUndefined()
 
-    // No package lost.
-    expect(Object.keys(data.packages).toSorted()).toEqual(['lodash', 'react', 'some-future-pkg'])
+    // No package lost — every former tracked package is now a favorite.
+    expect(Object.keys(data.favorites).toSorted()).toEqual(['lodash', 'react', 'some-future-pkg'])
 
-    // Favorites preserved.
-    expect(data.packages.lodash.favorite).toBe(true)
-    expect(data.packages.react.favorite).toBe(false)
+    // The defunct `favorite` boolean is dropped in v3.
+    expect((data.favorites.lodash as unknown as Record<string, unknown>).favorite).toBeUndefined()
+    expect((data.favorites.react as unknown as Record<string, unknown>).favorite).toBeUndefined()
 
     // Retired user-defined `tags` data round-trips untouched as an unknown field.
-    expect((data.packages.lodash as unknown as Record<string, unknown>).tags).toEqual([
+    expect((data.favorites.lodash as unknown as Record<string, unknown>).tags).toEqual([
       'lightweight',
       'frequently-used',
     ])
-    expect((data.packages.react as unknown as Record<string, unknown>).tags).toEqual(['production'])
+    expect((data.favorites.react as unknown as Record<string, unknown>).tags).toEqual([
+      'production',
+    ])
 
     // Existing optional fields preserved.
-    expect(data.packages.react.category).toBe('Frontend')
-    expect(data.packages.lodash.note).toBe('utils')
+    expect(data.favorites.react.category).toBe('Frontend')
+    expect(data.favorites.lodash.note).toBe('utils')
 
     // Missing required fields filled with safe defaults.
-    expect(data.packages.lodash.name).toBe('lodash')
-    expect(typeof data.packages.lodash.addedAt).toBe('string')
+    expect(data.favorites.lodash.name).toBe('lodash')
+    expect(typeof data.favorites.lodash.addedAt).toBe('string')
 
     // Unknown fields (per-package and top-level) round-trip untouched.
     expect(
-      (data.packages['some-future-pkg'] as unknown as Record<string, unknown>).futureField,
+      (data.favorites['some-future-pkg'] as unknown as Record<string, unknown>).futureField,
     ).toBe(42)
     expect(data.settings.theme).toBe('dark')
     expect((data as Record<string, unknown>).unknownTopLevel).toEqual({ keep: 'me' })
@@ -87,76 +90,90 @@ describe('migration is non-destructive (update-safety constraint)', () => {
   it('treats a missing file as empty data, not an error', () => {
     const data = loadData(file)
     expect(data.version).toBe(CURRENT_VERSION)
-    expect(data.packages).toEqual({})
+    expect(data.favorites).toEqual({})
   })
 
   it('is idempotent: migrating already-current data changes nothing material', () => {
     const once = migrate({ version: 0, packages: { a: { favorite: true, tags: ['x'] } } })
     const twice = migrate(once)
-    expect(twice.packages).toEqual(once.packages)
+    expect(twice.favorites).toEqual(once.favorites)
     expect(twice.version).toBe(CURRENT_VERSION)
   })
 })
 
-describe('mutators persist and never clobber user state', () => {
-  it('tracking an existing package keeps its favorite', () => {
-    trackPackage({ name: 'vue', version: '3.0.0' }, file)
-    setFavorite('vue', true, file)
-
-    // Re-track with new version — must not reset favorite.
-    trackPackage({ name: 'vue', version: '3.5.0' }, file)
+describe('v2 -> v3 migration collapses track/favorite into one favorites list', () => {
+  it('renames packages -> favorites, keeps every entry, and drops the favorite flag', () => {
+    const v2 = {
+      version: 2,
+      packages: {
+        // Mix of favorited and merely-tracked packages: both become favorites.
+        vue: { name: 'vue', addedAt: '2020-01-01T00:00:00.000Z', favorite: true, note: 'fav' },
+        lodash: { name: 'lodash', addedAt: '2020-02-02T00:00:00.000Z', favorite: false },
+      },
+      bundles: {},
+      settings: {},
+    }
+    writeFileSync(file, JSON.stringify(v2), 'utf8')
 
     const data = loadData(file)
-    expect(data.packages.vue.favorite).toBe(true)
-    expect(data.packages.vue.version).toBe('3.5.0')
+    expect(data.version).toBe(CURRENT_VERSION)
+    expect((data as Record<string, unknown>).packages).toBeUndefined()
+    expect(Object.keys(data.favorites).toSorted()).toEqual(['lodash', 'vue'])
+    expect((data.favorites.vue as unknown as Record<string, unknown>).favorite).toBeUndefined()
+    expect((data.favorites.lodash as unknown as Record<string, unknown>).favorite).toBeUndefined()
+    // Other fields survive.
+    expect(data.favorites.vue.note).toBe('fav')
+    expect(data.favorites.lodash.addedAt).toBe('2020-02-02T00:00:00.000Z')
   })
 
-  it('listPackages filters by favorite and category', () => {
-    trackPackage({ name: 'p1', category: 'Frontend' }, file)
-    setFavorite('p1', true, file)
-    trackPackage({ name: 'p2', category: 'Backend' }, file)
+  it('does not clobber a file that already uses favorites', () => {
+    const already = migrate({ version: 2, packages: { a: { name: 'a', favorite: true } } })
+    const again = migrate(already)
+    expect(again.favorites).toEqual(already.favorites)
+    expect(again.version).toBe(CURRENT_VERSION)
+  })
+})
 
-    expect(listPackages({ favorite: true }, file).map((p) => p.name)).toEqual(['p1'])
-    expect(listPackages({ category: 'Backend' }, file).map((p) => p.name)).toEqual(['p2'])
-    expect(listPackages({}, file)).toHaveLength(2)
+describe('favorite mutators persist and never clobber user state', () => {
+  it('re-favoriting an existing package refreshes version without losing metadata', () => {
+    addFavorite({ name: 'vue', version: '3.0.0', category: 'Frontend' }, file)
+
+    // Re-add with new version — must not reset the stored category.
+    addFavorite({ name: 'vue', version: '3.5.0' }, file)
+
+    const data = loadData(file)
+    expect(data.favorites.vue.version).toBe('3.5.0')
+    expect(data.favorites.vue.category).toBe('Frontend')
   })
 
-  it('untrack removes only the target', () => {
-    trackPackage({ name: 'a' }, file)
-    trackPackage({ name: 'b' }, file)
-    expect(untrack('a', file)).toBe(true)
-    expect(untrack('missing', file)).toBe(false)
-    expect(Object.keys(loadData(file).packages)).toEqual(['b'])
+  it('listFavorites filters by category and sorts by name', () => {
+    addFavorite({ name: 'p2', category: 'Backend' }, file)
+    addFavorite({ name: 'p1', category: 'Frontend' }, file)
+
+    expect(listFavorites({ category: 'Backend' }, file).map((p) => p.name)).toEqual(['p2'])
+    expect(listFavorites({}, file).map((p) => p.name)).toEqual(['p1', 'p2'])
+  })
+
+  it('removeFavorite removes only the target', () => {
+    addFavorite({ name: 'a' }, file)
+    addFavorite({ name: 'b' }, file)
+    expect(removeFavorite('a', file)).toBe(true)
+    expect(removeFavorite('missing', file)).toBe(false)
+    expect(Object.keys(loadData(file).favorites)).toEqual(['b'])
   })
 })
 
 describe('atomic save', () => {
   it('produces valid JSON with trailing newline', () => {
-    trackPackage({ name: 'a' }, file)
+    addFavorite({ name: 'a' }, file)
     const raw = readFileSync(file, 'utf8')
     expect(raw.endsWith('\n')).toBe(true)
     expect(() => JSON.parse(raw)).not.toThrow()
   })
 })
 
-describe('v1 -> v2 migration introduces bundles non-destructively', () => {
-  it('adds an empty bundles map while preserving tracked packages', () => {
-    const v1 = {
-      version: 1,
-      packages: {
-        lodash: { name: 'lodash', addedAt: '2020-01-01T00:00:00.000Z', favorite: true, tags: [] },
-      },
-      settings: {},
-    }
-    writeFileSync(file, JSON.stringify(v1), 'utf8')
-
-    const data = loadData(file)
-    expect(data.version).toBe(CURRENT_VERSION)
-    expect(data.bundles).toEqual({})
-    expect(data.packages.lodash.favorite).toBe(true)
-  })
-
-  it('preserves existing bundles on a v2 file (round-trip)', () => {
+describe('bundles survive migration alongside favorites', () => {
+  it('preserves existing bundles on a v2 file (round-trip into v3)', () => {
     const bundle = {
       name: 'web',
       tags: ['ui'],

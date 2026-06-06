@@ -2,20 +2,14 @@ import ansis from 'ansis'
 import { exec } from 'node:child_process'
 import process from 'node:process'
 
-import type { BundleDepType, BundlePackage, SearchResult, TrackedPackage } from '../core/types.ts'
+import type { BundleDepType, BundlePackage, FavoritePackage, SearchResult } from '../core/types.ts'
 
 import { normalizeCategory, suggestCategory } from '../core/categories.ts'
 import { buildInstallCommands, detectPM, formatCommand, runInstall } from '../core/pm.ts'
 import { discoverManifests, relativeScope } from '../core/project.ts'
 import { parseQuery } from '../core/query.ts'
 import { type SearchMode, searchPackages } from '../core/registry.ts'
-import {
-  addToBundle,
-  listPackages,
-  setFavorite,
-  sortByFavoriteThenName,
-  trackPackage,
-} from '../core/store.ts'
+import { addFavorite, addToBundle, listFavorites } from '../core/store.ts'
 import { highlightKeywords } from '../ui/highlight.ts'
 import {
   clack,
@@ -28,7 +22,7 @@ import {
 import { categoryLabel } from '../ui/render.ts'
 import { searchPrompt, type SearchOption } from '../ui/search-prompt.ts'
 
-/** Versions seen during search, so track/favorite can store them. */
+/** Versions seen during search, so favoriting can store them. */
 const versionCache = new Map<string, string>()
 
 function openInBrowser(url: string): void {
@@ -54,13 +48,13 @@ function toSearchOption(
   pkg: SearchResult,
   input: string,
   mode: SearchMode,
-  tracked?: TrackedPackage,
+  favorite?: FavoritePackage,
 ): SearchOption {
-  // Category prefix: stored category for tracked packages, otherwise the
+  // Category prefix: stored category for favorited packages, otherwise the
   // heuristic category guess.
   let prefix: string
-  if (!tracked) prefix = categoryLabel(pkg)
-  else prefix = tracked.category ? ansis.magenta(`[${tracked.category}]`) : ''
+  if (!favorite) prefix = categoryLabel(pkg)
+  else prefix = favorite.category ? ansis.magenta(`[${favorite.category}]`) : ''
 
   const name = `${highlightKeywords(pkg.name, input)} ${ansis.blue(`v${pkg.version}`)}`
   const label = prefix ? `${prefix} ${name}` : name
@@ -86,11 +80,11 @@ async function openSearchBox(seedQuery: string | undefined, mode: SearchMode): P
   const placeholder =
     mode === 'description'
       ? 'full-text search · try keyword:cli or author:name'
-      : 'search by name · try keyword:cli · Enter (empty) to browse tracked'
+      : 'search by name · try keyword:cli · Enter (empty) to browse favorites'
 
-  // The tracked list does not change while the box is open (tracking happens
+  // The favorites list does not change while the box is open (favoriting happens
   // later in runSetAction), so read it once instead of on every keystroke.
-  const trackedByName = new Map(listPackages().map((p) => [p.name, p]))
+  const favoritesByName = new Map(listFavorites().map((p) => [p.name, p]))
 
   // Per-package dependency type, populated by Ctrl+T inside the prompt.
   const depTypes = new Map<string, boolean>()
@@ -140,7 +134,7 @@ async function openSearchBox(seedQuery: string | undefined, mode: SearchMode): P
             const exactMatch = results.find((pkg) => pkg.name === input)
             searchResults = results
               .filter((pkg) => pkg.name !== input)
-              .map((pkg) => toSearchOption(pkg, input, mode, trackedByName.get(pkg.name)))
+              .map((pkg) => toSearchOption(pkg, input, mode, favoritesByName.get(pkg.name)))
 
             const updatedOpts: SearchOption[] = []
             if (isPackageName) {
@@ -179,9 +173,9 @@ async function openSearchBox(seedQuery: string | undefined, mode: SearchMode): P
   return { kind: 'selected', selections }
 }
 
-/** Track a searched package, carrying over its cached version and a category guess. */
-function trackFromSearch(name: string): void {
-  trackPackage({ name, version: versionCache.get(name), category: suggestCategory({ name }) })
+/** Favorite a searched package, carrying over its cached version and a category guess. */
+function favoriteFromSearch(name: string): void {
+  addFavorite({ name, version: versionCache.get(name), category: suggestCategory({ name }) })
 }
 
 /** Run the chosen action against a set of selected packages. */
@@ -225,30 +219,13 @@ async function runSetAction(selections: Selection[]): Promise<void> {
           return
         }
       }
-      // Offer to track what we just installed.
-      const track = ensure(
-        await clack.confirm({ message: 'Track these in Siz too?', initialValue: true }),
-      )
-      if (track) {
-        for (const name of names) trackFromSearch(name)
-      }
       clack.outro('Done.')
       return
     }
 
     case 'favorite': {
-      for (const name of names) {
-        trackFromSearch(name)
-        setFavorite(name, true)
-      }
+      for (const name of names) favoriteFromSearch(name)
       clack.log.success(`Favorited ${names.join(', ')}`)
-      clack.outro('Done.')
-      return
-    }
-
-    case 'track': {
-      for (const name of names) trackFromSearch(name)
-      clack.log.success(`Tracking ${names.join(', ')}`)
       clack.outro('Done.')
       return
     }
@@ -278,7 +255,6 @@ async function runSetAction(selections: Selection[]): Promise<void> {
         return { name: s.name, strategy: 'caret', depType }
       })
       addToBundle(target, entries)
-      for (const name of names) trackFromSearch(name)
       clack.log.success(`Added ${names.join(', ')} to bundle ${ansis.bold(target)}`)
       clack.outro('Done.')
       return
@@ -286,16 +262,16 @@ async function runSetAction(selections: Selection[]): Promise<void> {
   }
 }
 
-/** Empty-input path: pick from the user's tracked/favorited packages. */
-async function runBrowseTracked(filters: { category?: string } = {}): Promise<void> {
-  const tracked = sortByFavoriteThenName(listPackages(filters))
+/** Empty-input path: pick from the user's favorited packages. */
+async function runBrowseFavorites(filters: { category?: string } = {}): Promise<void> {
+  const favorites = listFavorites(filters)
 
-  if (tracked.length === 0) {
+  if (favorites.length === 0) {
     const filtered = filters.category
     clack.log.info(
       filtered
-        ? 'No tracked packages match that filter.'
-        : 'No tracked packages yet. Search and Track or Favorite some first.',
+        ? 'No favorites match that filter.'
+        : 'No favorites yet. Search and Favorite some first.',
     )
     clack.outro('Done.')
     return
@@ -303,11 +279,11 @@ async function runBrowseTracked(filters: { category?: string } = {}): Promise<vo
 
   const selected = ensure(
     await clack.multiselect<string>({
-      message: 'Your tracked packages',
+      message: 'Your favorite packages',
       required: false,
-      options: tracked.map((pkg) => ({
+      options: favorites.map((pkg) => ({
         value: pkg.name,
-        label: `${pkg.favorite ? `${ansis.red('fav')} ` : ''}${pkg.name}`,
+        label: pkg.name,
         hint: pkg.category || undefined,
       })),
     }),
@@ -317,7 +293,7 @@ async function runBrowseTracked(filters: { category?: string } = {}): Promise<vo
     clack.outro('Nothing selected.')
     return
   }
-  // The tracked-list view has no Ctrl+T marking, so default everything to dependency.
+  // The favorites view has no Ctrl+T marking, so default everything to dependency.
   await runSetAction(selected.map((name) => ({ name, dev: false })))
 }
 
@@ -330,10 +306,10 @@ export async function runInteractive(seedQuery?: string, mode: SearchMode = 'nam
       clack.cancel('Cancelled.')
       return
     case 'empty': {
-      // Carry the category qualifier from the seed into the tracked-list view,
+      // Carry the category qualifier from the seed into the favorites view,
       // which filters against the user's own categories.
       const { qualifiers } = parseQuery(seedQuery ?? '')
-      await runBrowseTracked({
+      await runBrowseFavorites({
         category: qualifiers.category ? normalizeCategory(qualifiers.category) : undefined,
       })
       return

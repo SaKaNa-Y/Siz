@@ -5,7 +5,7 @@
  * qualifiers. Some qualifiers map straight onto npm's native search syntax
  * (`keywords:`, `author:`, `scope:`), while others (`category:`) are applied
  * client-side. `tag:` is context-aware — in npm discovery it behaves like
- * `keyword:`, while the tracked-browse path uses it against the user's own tags.
+ * `keyword:`, while the favorites-browse path uses it against the user's own tags.
  *
  * Examples:
  *   "react"                  -> terms: ["react"]

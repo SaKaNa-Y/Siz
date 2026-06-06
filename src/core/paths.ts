@@ -20,7 +20,7 @@ export function findUp(filename: string, cwd: string = process.cwd()): string | 
  *
  * This intentionally lives in the user's home directory — NOT inside the
  * installed npm package — so updating/reinstalling Siz can never touch the
- * user's tracked packages or settings.
+ * user's favorites or settings.
  *
  * Resolution order:
  *  - Windows: %APPDATA%\siz  (falls back to ~/AppData/Roaming/siz)

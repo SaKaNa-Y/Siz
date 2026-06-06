@@ -1,13 +1,11 @@
 import type { Agent } from 'package-manager-detector'
 
-/** A package the user has chosen to track in Siz. */
-export interface TrackedPackage {
+/** A package the user has favorited in Siz. */
+export interface FavoritePackage {
   /** npm package name, e.g. "lodash" or "@vue/reactivity". */
   name: string
-  /** ISO timestamp of when it was first tracked. */
+  /** ISO timestamp of when it was first favorited. */
   addedAt: string
-  /** Whether the user marked it as a favorite. */
-  favorite: boolean
   /** Optional category (see core/categories.ts). */
   category?: string
   /** Optional free-form note. */
@@ -64,8 +62,8 @@ export interface SizData {
   $schema?: string
   /** Schema version for non-destructive migrations. */
   version: number
-  /** Tracked packages keyed by package name. */
-  packages: Record<string, TrackedPackage>
+  /** Favorited packages keyed by package name. */
+  favorites: Record<string, FavoritePackage>
   /** Saved bundles keyed by bundle name. */
   bundles: Record<string, Bundle>
   /** User settings (reserved for future use). */

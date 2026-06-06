@@ -3,7 +3,7 @@ import ansis from 'ansis'
 import type { SearchResult } from '../core/types.ts'
 
 import { type SearchMode, searchPackages } from '../core/registry.ts'
-import { listPackages } from '../core/store.ts'
+import { listFavorites } from '../core/store.ts'
 import { renderSearchResult } from '../ui/render.ts'
 
 export interface SearchPrintOptions {
@@ -29,9 +29,9 @@ export async function runSearchPrint(query: string, opts: SearchPrintOptions = {
 
   // Name mode hides descriptions/keywords to match the interactive behavior.
   const showDescription = mode === 'description'
-  const trackedNames = new Set(listPackages().map((p) => p.name))
+  const favoriteNames = new Set(listFavorites().map((p) => p.name))
   for (const r of results as SearchResult[]) {
-    console.log(renderSearchResult(r, { tracked: trackedNames.has(r.name), showDescription }))
+    console.log(renderSearchResult(r, { favorite: favoriteNames.has(r.name), showDescription }))
     console.log('')
   }
 }
