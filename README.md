@@ -8,31 +8,46 @@ Inspired by [`@rizumu/nai`](https://github.com/LittleSound/nai): Siz keeps nai's
 
 ## Features
 
-A check mark means the feature ships today; an empty box means it is planned.
+A check mark means the feature ships today; an empty box is planned, tagged **Next** (actively planned), **Later** (committed, unscheduled), or **Maybe** (exploratory).
+
+Siz is organized into three tracks — **Discover**, **Organize**, **Manage** — developed in parallel under one CLI. The Manage track aims to interoperate with the `ni` · `taze` ecosystem rather than compete with it.
+
+### Discover
 
 - [x] Live interactive npm search with type-as-you-go multi-select
 - [x] Full-text search across name and description (`siz search`)
 - [x] GitHub-style qualifiers in queries (`keyword:` `author:` `scope:` `category:` `tag:`)
-- [x] Install via your package manager (npm / pnpm / yarn / bun / deno) — pick it at install time, with a per-package dependency vs devDependency toggle
+- [ ] **Next** — Trust-aware discovery: maintenance/health signals (download trend, last-publish age, deprecation) shown inline on each result, before install
+- [ ] **Later** — Smart replacement suggestions for deprecated or heavier packages
+- [ ] **Later** — AI-assisted search: opt-in LLM query expansion and result reranking
+
+### Organize
+
 - [x] Favorite and categorize packages in a local list
 - [x] Heuristic auto-categorization when you add a package
-- [x] Upgrade project dependencies with ceiling semantics and `--dry-run`
-- [x] Safe local data store (user config dir, non-destructive migrations, atomic writes)
 - [x] Preset bundles — named groups of packages you can install together in one step
-- [x] Library API for programmatic use
+- [ ] **Later** — Local search and install history
+- [ ] **Maybe** — Team-shared presets
+
+### Manage
+
+_Interoperates with the `ni` · `taze` ecosystem._
+
+- [x] Install via your package manager (npm / pnpm / yarn / bun / deno) — pick it at install time, with a per-package dependency vs devDependency toggle
+- [x] Upgrade project dependencies with ceiling semantics and `--dry-run`
 - [x] pnpm catalog upgrades — bump `catalog:` / `catalogs:` versions in `pnpm-workspace.yaml`
 - [x] Monorepo install & recursive upgrades — workspace picker on install, `siz upgrade -r`
 - [x] Workspace-aware discovery — honor declared `packages:` / `workspaces` globs, skip stray manifests
-- [ ] Dependency rules — project-local, committable allow/restrict config
-- [ ] Catalog management during install — `ni`-style `catalog:` writing
-- [ ] Yarn & Bun catalog upgrades — extend catalog upgrades beyond pnpm
-- [ ] Nested-workspace guard & root pins — `--ignore-other-workspaces`, `pnpm.overrides` / `resolutions`
-- [ ] AI-assisted search — opt-in LLM query expansion and result reranking
-- [ ] Team-shared presets
-- [ ] Package analytics and usage statistics
-- [ ] Dependency health checks (outdated / deprecated / vulnerable)
-- [ ] Smart replacement suggestions for lighter or better-maintained alternatives
-- [ ] Local search and install history
+- [ ] **Next** — Dependency rules — project-local, committable allow/restrict config
+- [ ] **Later** — Catalog management during install — `ni`-style `catalog:` writing
+- [ ] **Later** — Yarn & Bun catalog upgrades — extend catalog upgrades beyond pnpm
+- [ ] **Later** — Nested-workspace guard & root pins — `--ignore-other-workspaces`, `pnpm.overrides` / `resolutions`
+- [ ] **Maybe** — Dependency health audit (outdated / deprecated / vulnerable) — standalone report; most of its value is delivered by trust-aware discovery above
+
+### Foundations
+
+- [x] Safe local data store (user config dir, non-destructive migrations, atomic writes)
+- [x] Library API for programmatic use
 
 ## Install
 
