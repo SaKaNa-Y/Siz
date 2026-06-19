@@ -17,7 +17,8 @@ Siz is organized into three tracks — **Discover**, **Organize**, **Manage** �
 - [x] Live interactive npm search with type-as-you-go multi-select
 - [x] Full-text search across name and description (`siz search`)
 - [x] GitHub-style qualifiers in queries (`keyword:` `author:` `scope:` `category:` `tag:`)
-- [ ] **Next** — Trust-aware discovery: maintenance/health signals (download trend, last-publish age, deprecation) shown inline on each result, before install
+- [x] Trust-aware discovery: deprecation, publish age, and provenance shown inline on each result, before install
+- [ ] **Later** — Download-trend signal — extend trust-aware discovery with download-count momentum
 - [ ] **Later** — Smart replacement suggestions for deprecated or heavier packages
 - [ ] **Later** — AI-assisted search: opt-in LLM query expansion and result reranking
 
@@ -120,6 +121,18 @@ After you confirm a selection, Siz shows an action menu for the chosen packages:
 - **Add to bundle** — save the selection to a reusable bundle.
 
 Pressing **Enter** on an empty box (nothing typed) opens your favorites instead, so your curated packages are the front door — select any and run the same action menu.
+
+### Trust signals
+
+To help you judge a package _before_ installing, Siz annotates each result with inline **trust signals** — health facts fetched alongside the search:
+
+| Glyph | Meaning                                                              |
+| ----- | ------------------------------------------------------------------- |
+| `⚠`   | **Deprecated** — the package carries a deprecation message          |
+| `⚑`   | **Stale** — its latest version was published more than 2 years ago  |
+| `✓`   | **Provenance** — the package has npm provenance or a trusted publisher |
+
+The glyphs show on every row so you can compare at a glance; the focused row expands them to words (e.g. `deprecated: no longer maintained · published 4y ago`). Signals are purely informational — they never block, filter, or reorder results. They load progressively (the list never waits on them) and degrade silently if the metadata service is unreachable. The `--list` and `--json` outputs include them too (`--json` adds `deprecated`, `publishedAt`, and `provenance` fields per result).
 
 ### Non-interactive output
 

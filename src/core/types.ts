@@ -92,3 +92,18 @@ export interface SearchResult {
   /** Raw search relevance score from the registry. */
   searchScore: number
 }
+
+/**
+ * Maintenance/health facts about a package, fetched separately from the search
+ * endpoint (which does not return them) and surfaced inline on a result. Purely
+ * informational — never blocks, filters, or reranks. All fields optional: an
+ * empty object means "no signals to show".
+ */
+export interface TrustSignals {
+  /** Non-empty deprecation message when the package is deprecated. */
+  deprecated?: string
+  /** ISO publish date of the latest version. */
+  publishedAt?: string
+  /** True when the package has npm provenance or a trusted publisher. */
+  provenance?: boolean
+}

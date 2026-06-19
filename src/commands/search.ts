@@ -1,9 +1,8 @@
 import ansis from 'ansis'
 
-import type { SearchResult } from '../core/types.ts'
-
 import { type SearchMode, searchPackages } from '../core/registry.ts'
 import { listFavorites } from '../core/store.ts'
+import { fetchTrustSignals } from '../core/trust.ts'
 import { renderSearchResult } from '../ui/render.ts'
 
 export interface SearchPrintOptions {
@@ -16,9 +15,15 @@ export interface SearchPrintOptions {
 export async function runSearchPrint(query: string, opts: SearchPrintOptions = {}): Promise<void> {
   const mode = opts.mode ?? 'name'
   const results = await searchPackages(query, { size: opts.size, mode })
+  const signals = await fetchTrustSignals(results.map((r) => r.name))
 
   if (opts.json) {
-    console.log(JSON.stringify(results, null, 2))
+    // Merge trust signals additively onto each result for scripting.
+    const enriched = results.map((r) => ({
+      ...r,
+      ...signals.get(r.name),
+    }))
+    console.log(JSON.stringify(enriched, null, 2))
     return
   }
 
@@ -30,8 +35,14 @@ export async function runSearchPrint(query: string, opts: SearchPrintOptions = {
   // Name mode hides descriptions/keywords to match the interactive behavior.
   const showDescription = mode === 'description'
   const favoriteNames = new Set(listFavorites().map((p) => p.name))
-  for (const r of results as SearchResult[]) {
-    console.log(renderSearchResult(r, { favorite: favoriteNames.has(r.name), showDescription }))
+  for (const r of results) {
+    console.log(
+      renderSearchResult(r, {
+        favorite: favoriteNames.has(r.name),
+        showDescription,
+        signals: signals.get(r.name),
+      }),
+    )
     console.log('')
   }
 }
