@@ -2,7 +2,13 @@ import ansis from 'ansis'
 import { exec } from 'node:child_process'
 import process from 'node:process'
 
-import type { BundleDepType, BundlePackage, FavoritePackage, SearchResult } from '../core/types.ts'
+import type {
+  BundleDepType,
+  BundlePackage,
+  FavoritePackage,
+  SearchResult,
+  TrustSignals,
+} from '../core/types.ts'
 
 import { normalizeCategory, suggestCategory } from '../core/categories.ts'
 import { buildInstallCommands, detectPM, formatCommand, runInstall } from '../core/pm.ts'
@@ -10,6 +16,7 @@ import { discoverManifests, relativeScope } from '../core/project.ts'
 import { parseQuery } from '../core/query.ts'
 import { type SearchMode, searchPackages } from '../core/registry.ts'
 import { addFavorite, addToBundle, listFavorites } from '../core/store.ts'
+import { fetchTrustSignals } from '../core/trust.ts'
 import { highlightKeywords } from '../ui/highlight.ts'
 import {
   clack,
@@ -19,7 +26,7 @@ import {
   pickPackageManager,
   pickSetAction,
 } from '../ui/prompts.ts'
-import { categoryLabel } from '../ui/render.ts'
+import { categoryLabel, trustDetail, trustGlyphs, trustLegend } from '../ui/render.ts'
 import { searchPrompt, type SearchOption } from '../ui/search-prompt.ts'
 
 /** Versions seen during search, so favoriting can store them. */
@@ -89,11 +96,24 @@ async function openSearchBox(seedQuery: string | undefined, mode: SearchMode): P
   // Per-package dependency type, populated by Ctrl+T inside the prompt.
   const depTypes = new Map<string, boolean>()
 
+  // Trust signals arrive progressively (a second fetch after each result set),
+  // read live at render time so rows fill in once they resolve.
+  const signalsByName = new Map<string, TrustSignals>()
+  // Fixed for the session — publish-age strings don't drift over a few minutes,
+  // and this avoids a Date.now() per row on every keystroke re-render.
+  const now = Date.now()
+
   const selected = await searchPrompt({
     message: mode === 'description' ? 'Search npm (descriptions)' : 'Search npm packages',
     placeholder,
     initialInput: seedQuery,
+    footer: trustLegend(),
     badge: (name) => (depTypes.get(name) ? ` ${ansis.cyan('[dev]')}` : ` ${ansis.dim('[dep]')}`),
+    signals: (name) => {
+      const s = signalsByName.get(name)
+      if (!s) return undefined
+      return { glyphs: trustGlyphs(s, now), detail: trustDetail(s, now) }
+    },
     onToggle: (name) => depTypes.set(name, !depTypes.get(name)),
     onOpen(name) {
       openInBrowser(`https://www.npmjs.com/package/${encodeURIComponent(name)}`)
@@ -150,6 +170,16 @@ async function openSearchBox(seedQuery: string | undefined, mode: SearchMode): P
             self.filteredOptions = updatedOpts
             self.focusedValue = updatedOpts[0]?.value
             process.stdin.emit('keypress', '', { name: '' })
+
+            // Progressive enhancement: fetch trust signals for this result set
+            // in the background and re-render when they arrive. Never blocks the
+            // list; failures degrade silently inside fetchTrustSignals.
+            const names = results.map((pkg) => pkg.name)
+            void fetchTrustSignals(names).then((signals) => {
+              if (lastSearchTerm !== input) return
+              for (const [name, s] of signals) signalsByName.set(name, s)
+              process.stdin.emit('keypress', '', { name: '' })
+            })
           } catch {
             // Search failed silently — direct option still works.
           } finally {

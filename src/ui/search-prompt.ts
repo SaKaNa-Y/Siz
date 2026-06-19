@@ -34,10 +34,18 @@ export interface SearchPromptOptions<T = string> {
   onOpen?: (value: T) => void
   /** Hint shown when input is empty. When set, allows empty submission. */
   placeholder?: string
+  /** Static line rendered at the bottom of the box (e.g. a glyph legend). */
+  footer?: string
   /** Pre-fill the search input (e.g. seed from a CLI query). */
   initialInput?: string
   /** Per-row annotation appended after the label (already styled, e.g. a badge). */
   badge?: (value: T) => string | undefined
+  /**
+   * Per-row trust signals, read live at render time (already styled). `glyphs`
+   * show on every row for at-a-glance comparison; `detail` expands only on the
+   * focused row. Either may be empty.
+   */
+  signals?: (value: T) => { glyphs?: string; detail?: string } | undefined
   /** Called when the user presses Ctrl+T on a focused option; followed by a re-render. */
   onToggle?: (value: T) => void
 }
@@ -131,12 +139,19 @@ export async function searchPrompt<T = string>(
 
             const badge = opts.badge?.(option.value) ?? ''
 
+            const trust = opts.signals?.(option.value)
+            const glyphs = trust?.glyphs ? ` ${trust.glyphs}` : ''
+            const detail =
+              trust?.detail && option.value === this.focusedValue
+                ? ` ${styleText('dim', '(')}${trust.detail}${styleText('dim', ')')}`
+                : ''
+
             if (option.disabled)
               return `${styleText('gray', S_CHECKBOX_INACTIVE)} ${styleText(['strikethrough', 'gray'] as const, label)}`
 
             return active
-              ? `${checkbox} ${label}${hint}${badge}`
-              : `${checkbox} ${styleText('dim', label)}${badge}`
+              ? `${checkbox} ${label}${glyphs}${hint}${badge}${detail}`
+              : `${checkbox} ${styleText('dim', label)}${glyphs}${badge}`
           }
 
           const placeholderLine =
@@ -178,8 +193,11 @@ export async function searchPrompt<T = string>(
                 ...(opts.onOpen ? [`${styleText('dim', 'Ctrl+O:')} browse`] : []),
               ]
 
+          const footerLines = opts.footer && hasOptions ? [`${bar}  ${opts.footer}`] : []
+
           const bottom = [
             ...(hasOptions ? [`${bar}  ${hints.join(styleText('dim', ' · '))}`] : []),
+            ...footerLines,
             ...selectedLines,
             styleText(color, S_BAR_END),
           ]

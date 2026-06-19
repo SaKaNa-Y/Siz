@@ -1,8 +1,9 @@
 import ansis from 'ansis'
 
-import type { FavoritePackage, SearchResult } from '../core/types.ts'
+import type { FavoritePackage, SearchResult, TrustSignals } from '../core/types.ts'
 
 import { suggestCategory } from '../core/categories.ts'
+import { formatPublishAge, isStale } from '../core/trust.ts'
 
 /** A small 0..1 score bar like ▰▰▰▱▱. */
 export function scoreBar(value: number, width = 5): string {
@@ -19,10 +20,43 @@ export function categoryLabel(r: SearchResult): string {
   return category ? ansis.magenta(`[${category}]`) : ''
 }
 
+/**
+ * Compact trust-signal glyphs for a result row: `⚠` deprecated, `⚑` stale,
+ * `✓` provenance. Returns '' when there's nothing to show.
+ */
+export function trustGlyphs(signals: TrustSignals, now: number): string {
+  const glyphs: string[] = []
+  if (signals.deprecated) glyphs.push(ansis.red('⚠'))
+  if (isStale(signals.publishedAt, now)) glyphs.push(ansis.yellow('⚑'))
+  if (signals.provenance) glyphs.push(ansis.green('✓'))
+  return glyphs.join(' ')
+}
+
+/** Expanded, word-form trust signals for a focused row / `--list` card. */
+export function trustDetail(signals: TrustSignals, now: number): string {
+  const parts: string[] = []
+  if (signals.deprecated) parts.push(ansis.red(`deprecated: ${signals.deprecated}`))
+  const stale = isStale(signals.publishedAt, now)
+  const age = formatPublishAge(signals.publishedAt, now)
+  if (age) parts.push(stale ? ansis.yellow(age) : ansis.dim(age))
+  if (signals.provenance) parts.push(ansis.green('provenance'))
+  return parts.join(ansis.dim(' · '))
+}
+
+/** One-line legend explaining the trust glyphs, shown beneath the search box. */
+export function trustLegend(): string {
+  return `${ansis.red('⚠')} ${ansis.dim('deprecated')}   ${ansis.yellow('⚑')} ${ansis.dim('stale (>2y)')}   ${ansis.green('✓')} ${ansis.dim('provenance')}`
+}
+
 /** Render one search result as a multi-line card. */
 export function renderSearchResult(
   r: SearchResult,
-  state: { favorite?: boolean; showDescription?: boolean } = {},
+  state: {
+    favorite?: boolean
+    showDescription?: boolean
+    signals?: TrustSignals
+    now?: number
+  } = {},
 ): string {
   const { showDescription = true } = state
   const marks = state.favorite ? ansis.red('★ fav') : ''
@@ -42,8 +76,11 @@ export function renderSearchResult(
           .join(', ')}`
       : ''
   const quality = `  ${ansis.dim('quality')} ${scoreBar(r.score.quality)}  ${ansis.dim('popularity')} ${scoreBar(r.score.popularity)}`
+  const signalsLine = state.signals
+    ? `  ${trustDetail(state.signals, state.now ?? Date.now())}`.trimEnd()
+    : ''
 
-  return [header, desc, keywords, quality].filter(Boolean).join('\n')
+  return [header, desc, keywords, quality, signalsLine].filter(Boolean).join('\n')
 }
 
 /** Render a favorited package as a compact one-liner for `siz list`. */
