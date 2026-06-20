@@ -18,6 +18,7 @@ import {
   renderBundleShow,
 } from '../ui/bundle-render.ts'
 import { clack, ensure, pickPackageManager } from '../ui/prompts.ts'
+import { applyInstallRules } from './install-rules.ts'
 
 /** Stable key matching an install item to a multiselect value. */
 function itemKey(item: { depType: string; name: string }): string {
@@ -84,6 +85,7 @@ export function runBundleRename(oldName: string, newName: string): void {
 
 export interface BundleInstallOptions {
   cwd?: string
+  noRules?: boolean
 }
 
 /**
@@ -144,7 +146,17 @@ export async function runBundleInstall(
     return
   }
 
-  const chosen = plan.items.filter((item) => selected.includes(itemKey(item)))
+  let chosen = plan.items.filter((item) => selected.includes(itemKey(item)))
+
+  // Dependency-rules guardrail: drop denied packages before building commands.
+  const filtered = applyInstallRules(chosen, (i) => i.name, {
+    cwd,
+    noRules: opts.noRules,
+    abortOutro: 'Nothing to install.',
+  })
+  if (!filtered) return
+  chosen = filtered
+
   const hasPeerOrOptional = chosen.some(
     (i) => i.depType === 'peerDependencies' || i.depType === 'optionalDependencies',
   )

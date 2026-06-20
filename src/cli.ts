@@ -25,7 +25,10 @@ const cli = cac('siz')
 
 /** Shared handler for the name (`siz`) and full-text (`siz search`) commands. */
 function searchAction(mode: SearchMode) {
-  return async (query: string[], opts: { size: number; json?: boolean; list?: boolean }) => {
+  return async (
+    query: string[],
+    opts: { size: number; json?: boolean; list?: boolean; rules?: boolean },
+  ) => {
     const q = query.join(' ').trim()
     // Non-interactive paths require a query.
     if ((opts.json || opts.list) && q) {
@@ -33,7 +36,8 @@ function searchAction(mode: SearchMode) {
       return
     }
     // Interactive: bare `siz` opens the search box; `siz <query>` seeds it.
-    await runInteractive(q || undefined, mode)
+    // cac exposes `--no-rules` as `rules === false`.
+    await runInteractive(q || undefined, mode, { noRules: opts.rules === false })
   }
 }
 
@@ -42,6 +46,7 @@ const defaultCommand = cli
   .option('-n, --size <n>', 'Number of results to fetch', { default: 20 })
   .option('--json', 'Output raw JSON results (requires a query)')
   .option('--list', 'Print results without the interactive box (requires a query)')
+  .option('--no-rules', 'Bypass dependency rules in siz.config.json when installing')
   .action(searchAction('name'))
 
 cli
@@ -49,6 +54,7 @@ cli
   .option('-n, --size <n>', 'Number of results to fetch', { default: 20 })
   .option('--json', 'Output raw JSON results (requires a query)')
   .option('--list', 'Print results without the interactive box (requires a query)')
+  .option('--no-rules', 'Bypass dependency rules in siz.config.json when installing')
   .action(searchAction('description'))
 
 const ADD_STRATEGIES = ['latest', 'exact', 'caret', 'tilde'] as const
@@ -87,32 +93,40 @@ const BUNDLE_USAGE = 'Use: list | install <name> | show <name> | rm <name> | ren
 
 cli
   .command('bundle <action> [arg1] [arg2]', 'Manage preset bundles')
-  .action(async (action: string, arg1: string | undefined, arg2: string | undefined) => {
-    switch (action) {
-      case 'list':
-      case 'ls':
-        runBundleList()
-        return
-      case 'install':
-        if (!arg1) throw new Error('Usage: siz bundle install <name>')
-        await runBundleInstall(arg1)
-        return
-      case 'show':
-        if (!arg1) throw new Error('Usage: siz bundle show <name>')
-        runBundleShow(arg1)
-        return
-      case 'rm':
-        if (!arg1) throw new Error('Usage: siz bundle rm <name>')
-        await runBundleRemove(arg1)
-        return
-      case 'rename':
-        if (!arg1 || !arg2) throw new Error('Usage: siz bundle rename <old> <new>')
-        runBundleRename(arg1, arg2)
-        return
-      default:
-        throw new Error(`Unknown bundle action "${action}". ${BUNDLE_USAGE}`)
-    }
-  })
+  .option('--no-rules', 'Bypass dependency rules in siz.config.json (bundle install)')
+  .action(
+    async (
+      action: string,
+      arg1: string | undefined,
+      arg2: string | undefined,
+      opts: { rules?: boolean },
+    ) => {
+      switch (action) {
+        case 'list':
+        case 'ls':
+          runBundleList()
+          return
+        case 'install':
+          if (!arg1) throw new Error('Usage: siz bundle install <name>')
+          await runBundleInstall(arg1, { noRules: opts.rules === false })
+          return
+        case 'show':
+          if (!arg1) throw new Error('Usage: siz bundle show <name>')
+          runBundleShow(arg1)
+          return
+        case 'rm':
+          if (!arg1) throw new Error('Usage: siz bundle rm <name>')
+          await runBundleRemove(arg1)
+          return
+        case 'rename':
+          if (!arg1 || !arg2) throw new Error('Usage: siz bundle rename <old> <new>')
+          runBundleRename(arg1, arg2)
+          return
+        default:
+          throw new Error(`Unknown bundle action "${action}". ${BUNDLE_USAGE}`)
+      }
+    },
+  )
 
 const UPGRADE_LEVELS = ['major', 'minor', 'patch', 'latest'] as const
 

@@ -24,3 +24,22 @@ A package whose latest version was published more than **2 years** ago. Renders 
 
 **Deprecated**:
 A package whose registry metadata carries a non-empty `deprecated` message. Always renders the `⚠` glyph; the message shows in the focused row's detail.
+
+### Manage
+
+**Dependency rule**:
+A project's committed policy about which packages may enter it, declared in [[#siz-config-json|`siz.config.json`]] as `allow` / `deny` glob lists over package **names** (not versions). A rule says nothing about *how* a package is installed — only *whether* it may be. Reused by both the [[#guardrail|guardrail]] and the future [[#audit|audit]].
+_Avoid_: "lockfile", "constraint" (versions are out of scope), "permission" (these are project-level, not user-level).
+
+**Guardrail**:
+The Manage-track enforcement of [[#dependency-rule|dependency rules]] at the moment a package would **enter the project** — i.e. the install paths only (the interactive Install action and `bundle install`). It blocks denied packages before install; it does not touch favorites, bundle records, or upgrades. Distinct from the [[#audit|audit]], which inspects packages already present.
+_Avoid_: "lint", "check" (that is the audit); "filter" (it blocks, it does not reorder or hide search results).
+
+**Allow / deny** (rule semantics):
+The two glob lists of a [[#dependency-rule|dependency rule]]. **Deny always wins**: a package is permitted when `(allow is empty OR the name matches some allow pattern) AND the name matches no deny pattern`. Empty `allow` means denylist mode (everything permitted except `deny`); non-empty `allow` means allowlist mode.
+
+**Audit** (`siz check`, planned):
+The Manage-track capability of **reporting** [[#dependency-rule|dependency-rule]] violations across a project's *existing* dependencies, regardless of how they got there — the counterpart to the install-time [[#guardrail|guardrail]]. Shares the same rule-evaluation core. Not yet built.
+
+**`siz.config.json`**:
+The project-local, committable file (nearest one, walking up from the working directory) that holds a project's [[#dependency-rule|dependency rules]]. A single root file governs the whole repository, including every workspace. Distinct from the user-global data store in the config dir, which holds favorites and bundles. Absent file ⇒ no rules; malformed file ⇒ siz fails closed (aborts) rather than permitting everything.

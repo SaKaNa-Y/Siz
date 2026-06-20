@@ -83,6 +83,20 @@ export function renderSearchResult(
   return [header, desc, keywords, quality, signalsLine].filter(Boolean).join('\n')
 }
 
+/**
+ * A multi-line notice listing packages blocked by dependency rules, each with the
+ * rule that blocked it, plus the config file they came from.
+ */
+export function formatBlockedNotice(
+  blocked: { name: string; reason: string }[],
+  configPath: string,
+): string {
+  const lines = blocked.map(
+    (b) => `  ${ansis.red('✗')} ${ansis.bold(b.name)} ${ansis.dim(`— ${b.reason}`)}`,
+  )
+  return [`Blocked by dependency rules (${ansis.dim(configPath)}):`, ...lines].join('\n')
+}
+
 /** Render a favorited package as a compact one-liner for `siz list`. */
 export function renderFavoriteLine(p: FavoritePackage): string {
   const name = ansis.bold(p.name)
