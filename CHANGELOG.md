@@ -1,5 +1,13 @@
 # @sakana-y/siz
 
+## 0.2.3
+
+### Patch Changes
+
+- [#24](https://github.com/SaKaNa-Y/Siz/pull/24) [`86536b6`](https://github.com/SaKaNa-Y/Siz/commit/86536b6e9ae60a5f376695d8a31014387151d840) Thanks [@SaKaNa-Y](https://github.com/SaKaNa-Y)! - Dependency rules: drop a committable `siz.config.json` at your repo root to declare `allow` / `deny` glob lists of package names, and siz blocks disallowed packages at install time — both the interactive **Install** action and `siz bundle install`. `deny` always wins; an empty `allow` is denylist mode, a non-empty `allow` is allowlist mode (`@ourorg/*`, `*-deprecated`, exact names all work). Denied packages in a selection are dropped with a notice naming the rule that blocked them; if every selection is blocked the action aborts non-zero. A missing config means no restrictions; a malformed config fails closed (siz aborts rather than letting everything through). Pass `--no-rules` to bypass for a deliberate one-off.
+
+- [#22](https://github.com/SaKaNa-Y/Siz/pull/22) [`e2797af`](https://github.com/SaKaNa-Y/Siz/commit/e2797af6a0cd4bd318c863b10a22f7eba4776529) Thanks [@SaKaNa-Y](https://github.com/SaKaNa-Y)! - Trust-aware discovery: search results now show inline trust signals — `⚠` deprecated, `⚑` stale (published >2 years ago), and `✓` provenance — so you can judge a package before installing. Glyphs appear on every row for at-a-glance comparison; the focused row expands them to words. Signals load progressively (the list never blocks on them) and degrade silently if the metadata service is unreachable. `--list` and `--json` output include them too, with `--json` adding `deprecated`, `publishedAt`, and `provenance` fields per result.
+
 ## 0.2.2
 
 ### Patch Changes
