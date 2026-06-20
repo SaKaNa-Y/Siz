@@ -28,6 +28,7 @@ import {
 } from '../ui/prompts.ts'
 import { categoryLabel, trustDetail, trustGlyphs, trustLegend } from '../ui/render.ts'
 import { searchPrompt, type SearchOption } from '../ui/search-prompt.ts'
+import { applyInstallRules } from './install-rules.ts'
 
 /** Versions seen during search, so favoriting can store them. */
 const versionCache = new Map<string, string>()
@@ -209,7 +210,10 @@ function favoriteFromSearch(name: string): void {
 }
 
 /** Run the chosen action against a set of selected packages. */
-async function runSetAction(selections: Selection[]): Promise<void> {
+async function runSetAction(
+  selections: Selection[],
+  opts: { noRules?: boolean } = {},
+): Promise<void> {
   const names = selections.map((s) => s.name)
   const action = await pickSetAction(names)
   switch (action) {
@@ -224,8 +228,18 @@ async function runSetAction(selections: Selection[]): Promise<void> {
       const manifests = await discoverManifests(cwd, { recursive: true })
       const targetDir = manifests.length > 1 ? await pickInstallTarget(manifests, cwd) : cwd
 
+      // Dependency-rules guardrail: drop denied packages before building the
+      // install command. Rules come from the nearest siz.config.json walking up
+      // from the current directory (a single root config governs all installs).
+      const installable = applyInstallRules(selections, (s) => s.name, {
+        cwd,
+        noRules: opts.noRules,
+        abortOutro: 'Aborted.',
+      })
+      if (!installable) return
+
       const agent = await pickPackageManager(await detectPM(targetDir))
-      const cmds = buildInstallCommands(agent, selections)
+      const cmds = buildInstallCommands(agent, installable)
       const styled = cmds.map((c) => ansis.cyan(formatCommand(c)))
       const scope = relativeScope(cwd, targetDir)
       const where = scope ? ` in ${ansis.bold(scope)}` : ''
@@ -293,7 +307,10 @@ async function runSetAction(selections: Selection[]): Promise<void> {
 }
 
 /** Empty-input path: pick from the user's favorited packages. */
-async function runBrowseFavorites(filters: { category?: string } = {}): Promise<void> {
+async function runBrowseFavorites(
+  filters: { category?: string } = {},
+  opts: { noRules?: boolean } = {},
+): Promise<void> {
   const favorites = listFavorites(filters)
 
   if (favorites.length === 0) {
@@ -324,11 +341,18 @@ async function runBrowseFavorites(filters: { category?: string } = {}): Promise<
     return
   }
   // The favorites view has no Ctrl+T marking, so default everything to dependency.
-  await runSetAction(selected.map((name) => ({ name, dev: false })))
+  await runSetAction(
+    selected.map((name) => ({ name, dev: false })),
+    opts,
+  )
 }
 
 /** Entry point for bare `siz` (and `siz <query>` which seeds the box). */
-export async function runInteractive(seedQuery?: string, mode: SearchMode = 'name'): Promise<void> {
+export async function runInteractive(
+  seedQuery?: string,
+  mode: SearchMode = 'name',
+  opts: { noRules?: boolean } = {},
+): Promise<void> {
   clack.intro(ansis.bold.cyan('siz'))
   const result = await openSearchBox(seedQuery, mode)
   switch (result.kind) {
@@ -339,13 +363,16 @@ export async function runInteractive(seedQuery?: string, mode: SearchMode = 'nam
       // Carry the category qualifier from the seed into the favorites view,
       // which filters against the user's own categories.
       const { qualifiers } = parseQuery(seedQuery ?? '')
-      await runBrowseFavorites({
-        category: qualifiers.category ? normalizeCategory(qualifiers.category) : undefined,
-      })
+      await runBrowseFavorites(
+        {
+          category: qualifiers.category ? normalizeCategory(qualifiers.category) : undefined,
+        },
+        opts,
+      )
       return
     }
     case 'selected':
-      await runSetAction(result.selections)
+      await runSetAction(result.selections, opts)
       return
   }
 }

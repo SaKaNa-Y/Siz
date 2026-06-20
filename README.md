@@ -39,7 +39,8 @@ _Interoperates with the `ni` · `taze` ecosystem._
 - [x] pnpm catalog upgrades — bump `catalog:` / `catalogs:` versions in `pnpm-workspace.yaml`
 - [x] Monorepo install & recursive upgrades — workspace picker on install, `siz upgrade -r`
 - [x] Workspace-aware discovery — honor declared `packages:` / `workspaces` globs, skip stray manifests
-- [ ] **Next** — Dependency rules — project-local, committable allow/restrict config
+- [x] Dependency rules — project-local, committable allow/deny config that gates installs
+- [ ] **Later** — `siz check` audit — report dependency-rule violations across existing `package.json`(s); CI-enforceable, reuses the rules engine
 - [ ] **Later** — Catalog management during install — `ni`-style `catalog:` writing
 - [ ] **Later** — Yarn & Bun catalog upgrades — extend catalog upgrades beyond pnpm
 - [ ] **Later** — Nested-workspace guard & root pins — `--ignore-other-workspaces`, `pnpm.overrides` / `resolutions`
@@ -169,6 +170,37 @@ In a monorepo, `-r` / `--recursive` discovers the workspace's member `package.js
 **pnpm catalogs.** If a `pnpm-workspace.yaml` is found (walking up from the current directory), Siz reads its `catalog:` and `catalogs:` blocks and offers each entry as its own upgrade row, tagged `catalog` (or `catalog:<name>`). Selected entries are rewritten **in `pnpm-workspace.yaml`** — format- and comment-preservingly — so a version is bumped once for the whole workspace. The `catalog:` references inside each `package.json` are deliberately left untouched, since they point at the catalog that just changed. (Yarn and Bun catalogs are not handled yet.)
 
 Specifiers that aren't plain registry ranges — `workspace:`, `catalog:`, npm aliases, git/file/link sources — and packages not found on the registry are skipped and left untouched (the package.json `catalog:` refs are managed via the catalog itself, as described above).
+
+## Dependency rules
+
+Drop a committable `siz.config.json` at your repo root to declare which packages may be installed. Siz reads it and **blocks disallowed packages at install time** — both the interactive **Install** action and `siz bundle install`.
+
+```jsonc
+{
+  "$schema": "https://json.schemastore.org/...", // optional, ignored by siz
+  "rules": {
+    "allow": ["@ourorg/*", "react", "react-dom"],
+    "deny": ["lodash", "*-deprecated", "@ourorg/legacy-*"]
+  }
+}
+```
+
+Both lists are **glob patterns matched against the package name**: `*` matches any run of characters (slash-agnostic), so `lodash` is an exact match, `@ourorg/*` covers a whole scope, and `*-deprecated` is a suffix match.
+
+- **`allow` empty/omitted** → *denylist mode*: everything is permitted except what matches `deny`.
+- **`allow` non-empty** → *allowlist mode*: a package is permitted only if it matches `allow`.
+- **`deny` always wins.** A package matching both is blocked — so `allow: ["@ourorg/*"]` with `deny: ["@ourorg/legacy-*"]` admits your scope but still blocks the legacy packages.
+
+Formally: `permitted = (allow empty OR name matches allow) AND NOT (name matches deny)`.
+
+When you install a selection, denied packages are dropped with a notice naming each one and the rule that blocked it; the allowed remainder proceeds. If **every** selected package is blocked, the action aborts with a non-zero exit. The config is loaded from the nearest `siz.config.json` walking up from the current directory — a single root file governs the whole repo, including every workspace.
+
+```bash
+siz --no-rules                    # bypass rules for a deliberate one-off (prints a loud notice)
+siz bundle install my-stack --no-rules
+```
+
+Behavior at the edges: **no `siz.config.json` → no restrictions** (rules are opt-in); a **malformed `siz.config.json` → siz aborts with a parse error** rather than silently letting everything through (a broken policy must fail closed). Rules gate what you *add* through siz; reporting violations in dependencies you *already have* is the job of the planned `siz check` audit.
 
 ## Bundles
 

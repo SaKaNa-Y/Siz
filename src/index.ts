@@ -87,5 +87,19 @@ export {
   type CatalogEntry,
   type CatalogManifest,
 } from './core/catalog.ts'
+export {
+  loadRules,
+  evaluateRule,
+  partitionByRules,
+  matchesPattern,
+  globToRegExp,
+  normalizeRules,
+  CONFIG_FILENAME,
+  type DependencyRules,
+  type SizConfig,
+  type RuleVerdict,
+  type RulePartition,
+  type LoadedRules,
+} from './core/rules.ts'
 export { searchPrompt, type SearchOption, type SearchPromptOptions } from './ui/search-prompt.ts'
 export { highlightKeywords } from './ui/highlight.ts'
