@@ -40,7 +40,16 @@ export {
   type InstallCommand,
   type SpecSelection,
 } from './core/pm.ts'
-export { fetchTrustSignals, isStale, formatPublishAge, STALE_YEARS } from './core/trust.ts'
+export {
+  fetchTrustSignals,
+  fetchDownloadTrend,
+  computeMomentum,
+  isStale,
+  formatPublishAge,
+  STALE_YEARS,
+  MOMENTUM_THRESHOLD,
+  MOMENTUM_MIN_DOWNLOADS,
+} from './core/trust.ts'
 export {
   findPackageJson,
   loadProjectManifest,

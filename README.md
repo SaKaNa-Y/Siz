@@ -18,7 +18,7 @@ Siz is organized into three tracks — **Discover**, **Organize**, **Manage** �
 - [x] Full-text search across name and description (`siz search`)
 - [x] GitHub-style qualifiers in queries (`keyword:` `author:` `scope:` `category:` `tag:`)
 - [x] Trust-aware discovery: deprecation, publish age, and provenance shown inline on each result, before install
-- [ ] **Later** — Download-trend signal — extend trust-aware discovery with download-count momentum
+- [x] Download-trend signal — `↑`/`↓` download-count momentum inline on each result (scoped packages excepted)
 - [ ] **Later** — Smart replacement suggestions for deprecated or heavier packages
 - [ ] **Later** — AI-assisted search: opt-in LLM query expansion and result reranking
 
@@ -133,7 +133,7 @@ To help you judge a package _before_ installing, Siz annotates each result with 
 | `⚑`   | **Stale** — its latest version was published more than 2 years ago  |
 | `✓`   | **Provenance** — the package has npm provenance or a trusted publisher |
 
-The glyphs show on every row so you can compare at a glance; the focused row expands them to words (e.g. `deprecated: no longer maintained · published 4y ago`). Signals are purely informational — they never block, filter, or reorder results. They load progressively (the list never waits on them) and degrade silently if the metadata service is unreachable. The `--list` and `--json` outputs include them too (`--json` adds `deprecated`, `publishedAt`, and `provenance` fields per result).
+The glyphs show on every row so you can compare at a glance; the focused row expands them to words (e.g. `deprecated: no longer maintained · published 4y ago`). Signals are purely informational — they never block, filter, or reorder results. They load progressively (the list never waits on them) and degrade silently if the metadata service (`fast-npm-meta`, see [Data sources & network](#data-sources--network)) is unreachable. The `--list` and `--json` outputs include them too (`--json` adds `deprecated`, `publishedAt`, and `provenance` fields per result).
 
 ### Non-interactive output
 
@@ -281,6 +281,20 @@ addFavorite({ name: 'urql', category: suggestCategory({ name: 'urql' }) })
 const agent = await detectPM()
 console.log(formatCommand(buildInstallCommand(agent, ['urql'], { dev: false })))
 ```
+
+## Data sources & network
+
+Siz talks to a few different services depending on what you're doing:
+
+| Feature | Endpoint | Provider |
+| ------- | -------- | -------- |
+| Package search (interactive, `search`, `--list`, `--json`) | `registry.npmjs.org/-/v1/search` | Official npm registry |
+| Trust signals (deprecation, publish age, provenance) | `npm.antfu.dev` (via [`fast-npm-meta`](https://github.com/antfu/fast-npm-meta)) | Third-party hosted aggregator |
+| Upgrade version resolution (`siz upgrade`) | `npm.antfu.dev` (via `fast-npm-meta`) | Third-party hosted aggregator |
+| Bundle latest-version resolution (`bundle install`) | `npm.antfu.dev` (via `fast-npm-meta`) | Third-party hosted aggregator |
+| Download-trend momentum (`↑`/`↓`) | `api.npmjs.org/downloads` | Official npm download-counts API |
+
+Trust signals, upgrades, and bundle resolution go through **`fast-npm-meta`**, whose default API endpoint is **`https://npm.antfu.dev/`** — a third-party service (maintained by [antfu](https://github.com/antfu)) that mirrors and aggregates the npm registry so this data can be fetched in a single batched request. These calls **degrade silently** if the service is unreachable (trust glyphs simply don't appear; upgrades/bundles surface the failure). Note that `fast-npm-meta` cannot be pointed at the raw `registry.npmjs.org` — it speaks its own aggregation protocol — so removing this dependency would require self-hosting that API or reimplementing the fetches. Package search and download-trend momentum use **official npm endpoints** directly. See [ADR 0003](./docs/adr/0003-fast-npm-meta-hosted-endpoint.md) for the rationale.
 
 ## License
 

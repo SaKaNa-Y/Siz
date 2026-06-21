@@ -25,6 +25,10 @@ A package whose latest version was published more than **2 years** ago. Renders 
 **Deprecated**:
 A package whose registry metadata carries a non-empty `deprecated` message. Always renders the `⚠` glyph; the message shows in the focused row's detail.
 
+**Momentum** (download trend):
+The direction of a package's recent download volume — **rising** (`↑`, green) or **falling** (`↓`, red) — derived from npm's download API, a separate source from the metadata behind the other [[#trust-signal|trust signals]]. It is a [[#trust-signal|trust signal]], not a [[#score|score]]: `score.popularity` is npm's static popularity number, momentum is *change over time*. **Approximate by design** (a two-call proxy, see ADR 0002) and **two-sided** (unlike positive-only [[#provenance|provenance]], both directions show). Suppressed below a download-volume floor (too noisy) and **unavailable for scoped packages** (`@scope/pkg`), which the bulk download endpoint rejects — those simply show no momentum glyph. Flat/unknown renders nothing.
+_Avoid_: "popularity" (that is the existing [[#score|score]]), "downloads" (we show direction, not a count).
+
 ### Manage
 
 **Dependency rule**:

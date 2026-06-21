@@ -16,7 +16,7 @@ import { discoverManifests, relativeScope } from '../core/project.ts'
 import { parseQuery } from '../core/query.ts'
 import { type SearchMode, searchPackages } from '../core/registry.ts'
 import { addFavorite, addToBundle, listFavorites } from '../core/store.ts'
-import { fetchTrustSignals } from '../core/trust.ts'
+import { fetchDownloadTrend, fetchTrustSignals } from '../core/trust.ts'
 import { highlightKeywords } from '../ui/highlight.ts'
 import {
   clack,
@@ -172,15 +172,20 @@ async function openSearchBox(seedQuery: string | undefined, mode: SearchMode): P
             self.focusedValue = updatedOpts[0]?.value
             process.stdin.emit('keypress', '', { name: '' })
 
-            // Progressive enhancement: fetch trust signals for this result set
-            // in the background and re-render when they arrive. Never blocks the
-            // list; failures degrade silently inside fetchTrustSignals.
+            // Progressive enhancement: fetch trust signals + download trend for
+            // this result set in the background and re-render when they arrive.
+            // Two independent fetches (different APIs) merged additively onto the
+            // same entry, so neither clobbers the other regardless of order.
+            // Never blocks the list; both degrade silently on failure.
             const names = results.map((pkg) => pkg.name)
-            void fetchTrustSignals(names).then((signals) => {
+            const mergeSignals = (signals: Map<string, TrustSignals>) => {
               if (lastSearchTerm !== input) return
-              for (const [name, s] of signals) signalsByName.set(name, s)
+              for (const [name, s] of signals)
+                signalsByName.set(name, { ...signalsByName.get(name), ...s })
               process.stdin.emit('keypress', '', { name: '' })
-            })
+            }
+            void fetchTrustSignals(names).then(mergeSignals)
+            void fetchDownloadTrend(names).then(mergeSignals)
           } catch {
             // Search failed silently — direct option still works.
           } finally {
