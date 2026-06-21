@@ -1,8 +1,10 @@
 import ansis from 'ansis'
 
+import type { TrustSignals } from '../core/types.ts'
+
 import { type SearchMode, searchPackages } from '../core/registry.ts'
 import { listFavorites } from '../core/store.ts'
-import { fetchTrustSignals } from '../core/trust.ts'
+import { fetchDownloadTrend, fetchTrustSignals } from '../core/trust.ts'
 import { renderSearchResult } from '../ui/render.ts'
 
 export interface SearchPrintOptions {
@@ -15,7 +17,15 @@ export interface SearchPrintOptions {
 export async function runSearchPrint(query: string, opts: SearchPrintOptions = {}): Promise<void> {
   const mode = opts.mode ?? 'name'
   const results = await searchPackages(query, { size: opts.size, mode })
-  const signals = await fetchTrustSignals(results.map((r) => r.name))
+  const names = results.map((r) => r.name)
+  // Two independent sources (metadata + download API), fetched in parallel and
+  // merged per package into one TrustSignals.
+  const [trust, trend] = await Promise.all([fetchTrustSignals(names), fetchDownloadTrend(names)])
+  const signals = new Map<string, TrustSignals>()
+  for (const name of names) {
+    const merged = { ...trust.get(name), ...trend.get(name) }
+    if (Object.keys(merged).length > 0) signals.set(name, merged)
+  }
 
   if (opts.json) {
     // Merge trust signals additively onto each result for scripting.

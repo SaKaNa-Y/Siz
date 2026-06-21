@@ -1,6 +1,13 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { fetchTrustSignals, formatPublishAge, isStale, STALE_YEARS } from '../src/core/trust.ts'
+import {
+  computeMomentum,
+  fetchDownloadTrend,
+  fetchTrustSignals,
+  formatPublishAge,
+  isStale,
+  STALE_YEARS,
+} from '../src/core/trust.ts'
 
 // Mock the network layer. getLatestVersionBatch (metadata) returns a row per
 // name keyed off the name so we can assert mapping, plus a PackageError for the
@@ -115,5 +122,104 @@ describe('fetchTrustSignals', () => {
     const map = await fetchTrustSignals(['memo-pkg'])
     expect(batch).not.toHaveBeenCalled()
     expect(map.get('memo-pkg')?.provenance).toBe(true)
+  })
+})
+
+describe('computeMomentum', () => {
+  it('flags a clear rise', () => {
+    // weekly 4000 → 571/day vs baseline (10000-4000)/23 ≈ 261/day → +119%
+    expect(computeMomentum(4000, 10000)).toBe('rising')
+  })
+
+  it('flags a clear fall', () => {
+    // weekly 1000 → 143/day vs baseline (10000-1000)/23 ≈ 391/day → -63%
+    expect(computeMomentum(1000, 10000)).toBe('falling')
+  })
+
+  it('returns undefined for an even (flat) distribution', () => {
+    // ~333/day either way → within ±20% threshold
+    expect(computeMomentum(2333, 10000)).toBeUndefined()
+  })
+
+  it('suppresses below the volume floor even on a huge swing', () => {
+    // 400/week on 500/month would be a big % rise, but it is too noisy to trust
+    expect(computeMomentum(400, 500)).toBeUndefined()
+  })
+
+  it('guards divide-by-zero when the whole month is the recent week', () => {
+    expect(computeMomentum(2000, 2000)).toBeUndefined()
+  })
+})
+
+describe('fetchDownloadTrend', () => {
+  // weekly/monthly totals per package; null means "no data" from the endpoint.
+  const downloads: Record<string, { week: number; month: number } | null> = {
+    'rise-a': { week: 4000, month: 10000 },
+    'fall-a': { week: 1000, month: 10000 },
+    'flat-a': { week: 2333, month: 10000 },
+    'null-a': null,
+    'scope-peer': { week: 4000, month: 10000 },
+    'memo-a': { week: 4000, month: 10000 },
+  }
+
+  let fetchMock: ReturnType<typeof vi.fn>
+
+  beforeEach(() => {
+    fetchMock = vi.fn(async (url: string) => {
+      const u = String(url)
+      const period = u.includes('/last-week/') ? 'week' : 'month'
+      const names = u.split('/').pop()!.split(',')
+      const body: Record<string, { downloads: number } | null> = {}
+      for (const name of names) {
+        const d = downloads[name]
+        body[name] = d ? { downloads: d[period] } : null
+      }
+      return { ok: true, json: async () => body } as unknown as Response
+    })
+    vi.stubGlobal('fetch', fetchMock)
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('derives rising / falling verdicts and omits flat', async () => {
+    const map = await fetchDownloadTrend(['rise-a', 'fall-a', 'flat-a'])
+    expect(map.get('rise-a')).toEqual({ momentum: 'rising' })
+    expect(map.get('fall-a')).toEqual({ momentum: 'falling' })
+    expect(map.has('flat-a')).toBe(false)
+  })
+
+  it('skips scoped packages without requesting them', async () => {
+    const map = await fetchDownloadTrend(['@scope/pkg', 'scope-peer'])
+    expect(map.has('@scope/pkg')).toBe(false)
+    for (const call of fetchMock.mock.calls) {
+      expect(String(call[0])).not.toContain('@scope')
+    }
+  })
+
+  it('omits packages the endpoint has no data for', async () => {
+    const map = await fetchDownloadTrend(['null-a'])
+    expect(map.has('null-a')).toBe(false)
+  })
+
+  it('memoizes results so repeated names are not refetched', async () => {
+    await fetchDownloadTrend(['memo-a'])
+    expect(fetchMock).toHaveBeenCalled()
+    fetchMock.mockClear()
+    const map = await fetchDownloadTrend(['memo-a'])
+    expect(fetchMock).not.toHaveBeenCalled()
+    expect(map.get('memo-a')).toEqual({ momentum: 'rising' })
+  })
+
+  it('degrades silently when the request fails', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new Error('network down')
+      }),
+    )
+    const map = await fetchDownloadTrend(['degrade-a'])
+    expect(map.has('degrade-a')).toBe(false)
   })
 })

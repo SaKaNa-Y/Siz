@@ -106,4 +106,10 @@ export interface TrustSignals {
   publishedAt?: string
   /** True when the package has npm provenance or a trusted publisher. */
   provenance?: boolean
+  /**
+   * Download-trend direction, derived from npm's download API (a different
+   * endpoint than the search/metadata sources above). `undefined` when the
+   * trend is flat, below the volume floor, or unavailable (e.g. scoped packages).
+   */
+  momentum?: 'rising' | 'falling'
 }

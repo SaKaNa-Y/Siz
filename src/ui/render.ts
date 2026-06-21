@@ -22,13 +22,16 @@ export function categoryLabel(r: SearchResult): string {
 
 /**
  * Compact trust-signal glyphs for a result row: `⚠` deprecated, `⚑` stale,
- * `✓` provenance. Returns '' when there's nothing to show.
+ * `✓` provenance, `↑` downloads rising / `↓` falling. Returns '' when there's
+ * nothing to show.
  */
 export function trustGlyphs(signals: TrustSignals, now: number): string {
   const glyphs: string[] = []
   if (signals.deprecated) glyphs.push(ansis.red('⚠'))
   if (isStale(signals.publishedAt, now)) glyphs.push(ansis.yellow('⚑'))
   if (signals.provenance) glyphs.push(ansis.green('✓'))
+  if (signals.momentum === 'rising') glyphs.push(ansis.green('↑'))
+  else if (signals.momentum === 'falling') glyphs.push(ansis.red('↓'))
   return glyphs.join(' ')
 }
 
@@ -40,12 +43,14 @@ export function trustDetail(signals: TrustSignals, now: number): string {
   const age = formatPublishAge(signals.publishedAt, now)
   if (age) parts.push(stale ? ansis.yellow(age) : ansis.dim(age))
   if (signals.provenance) parts.push(ansis.green('provenance'))
+  if (signals.momentum === 'rising') parts.push(ansis.green('downloads rising'))
+  else if (signals.momentum === 'falling') parts.push(ansis.red('downloads falling'))
   return parts.join(ansis.dim(' · '))
 }
 
 /** One-line legend explaining the trust glyphs, shown beneath the search box. */
 export function trustLegend(): string {
-  return `${ansis.red('⚠')} ${ansis.dim('deprecated')}   ${ansis.yellow('⚑')} ${ansis.dim('stale (>2y)')}   ${ansis.green('✓')} ${ansis.dim('provenance')}`
+  return `${ansis.red('⚠')} ${ansis.dim('deprecated')}   ${ansis.yellow('⚑')} ${ansis.dim('stale (>2y)')}   ${ansis.green('✓')} ${ansis.dim('provenance')}   ${ansis.green('↑')} ${ansis.dim('rising')}   ${ansis.red('↓')} ${ansis.dim('falling')}`
 }
 
 /** Render one search result as a multi-line card. */
