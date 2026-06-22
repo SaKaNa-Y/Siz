@@ -1,5 +1,15 @@
 # @sakana-y/siz
 
+## 0.3.0
+
+### Minor Changes
+
+- [#28](https://github.com/SaKaNa-Y/Siz/pull/28) [`0516406`](https://github.com/SaKaNa-Y/Siz/commit/05164063fc7fbda349d0906f4467036a3095fded) Thanks [@SaKaNa-Y](https://github.com/SaKaNa-Y)! - Add `siz outdated` — a read-only, non-interactive report of dependencies that are behind the registry. It shows each dependency as **Current / Wanted / Latest** (Current is the declared range floor, so it works on a fresh checkout before install), mirrors `siz upgrade`'s scope with `-r/--recursive` and pnpm catalog support, and never writes or installs anything. Use `--json` to emit `{ outdated, skipped, summary }` for CI, and `--exit-code` to fail the build when anything is outdated.
+
+### Patch Changes
+
+- [#25](https://github.com/SaKaNa-Y/Siz/pull/25) [`ae36997`](https://github.com/SaKaNa-Y/Siz/commit/ae369972f5b3cdb489d2929273dcffa8ee66c798) Thanks [@SaKaNa-Y](https://github.com/SaKaNa-Y)! - Add download-trend momentum to trust-aware search results. Each result now shows a `↑` (rising) or `↓` (falling) glyph when its npm download volume is climbing or dropping, derived from npm's public download-counts API. The trend is informational only — it never reranks or filters — and appears in interactive search, `--list`, and `--json` output. Scoped packages (`@scope/pkg`) and very low-volume packages show no momentum.
+
 ## 0.2.3
 
 ### Patch Changes
