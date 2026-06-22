@@ -47,7 +47,8 @@ Siz is a unified package-management workflow layer: an interactive interface ove
 - [x] pnpm catalog upgrades — bump `catalog:` / `catalogs:` versions in `pnpm-workspace.yaml`
 - [x] Monorepo install & recursive upgrades — workspace picker on install, `siz upgrade -r`
 - [x] Workspace-aware discovery — honor declared `packages:` / `workspaces` globs, skip stray manifests
-- [ ] **Next** — Outdated report — `siz outdated`, read-only and non-interactive (`--json` for CI); reuses the upgrade version-fetch core
+- [x] Outdated report — `siz outdated`, read-only and non-interactive (`--json` for CI, `--exit-code` to gate); reuses the upgrade version-fetch core
+- [ ] **Later** — Trust signals in the outdated report — surface deprecated/stale flags alongside version drift
 - [ ] **Later** — `siz why <pkg>` — explain why a dependency is present / who pulled it in
 
 **Govern**
@@ -184,6 +185,21 @@ In a monorepo, `-r` / `--recursive` discovers the workspace's member `package.js
 
 Specifiers that aren't plain registry ranges — `workspace:`, `catalog:`, npm aliases, git/file/link sources — and packages not found on the registry are skipped and left untouched (the package.json `catalog:` refs are managed via the catalog itself, as described above).
 
+## Outdated report
+
+`siz outdated` is the **read-only, non-interactive** counterpart to `siz upgrade`: it reports which dependencies are behind the registry and **never writes or installs anything**. It reuses the same version-fetch core (and the same workspace- and catalog-aware discovery), so it covers exactly what `siz upgrade` could act on.
+
+```bash
+siz outdated              # Current / Wanted / Latest table for the nearest package.json
+siz outdated -r           # recurse into every workspace member (and catalog entries)
+siz outdated --json       # emit { outdated, skipped, summary } for CI/scripting
+siz outdated --exit-code  # exit 1 when anything is outdated (a CI gate)
+```
+
+Each row shows three versions: **Current** — the floor of your declared range (the lowest version it allows, *not* the installed version, so the report works on a fresh checkout before `install`); **Wanted** — the highest version still satisfying that range; and **Latest** — the registry's `latest` dist-tag, tinted by how big the jump is (major/minor/patch). A dependency is "outdated" whenever Latest is ahead of Current.
+
+`--json` prints a single object — `{ outdated: [...], skipped: [...], summary: { total, upToDate, skipped } }` — to stdout only, so `siz outdated --json | jq '.summary.total'` is a clean gate. Non-registry, unparseable, and not-found specifiers don't appear in the table but are counted in the summary and listed under `skipped`. Exit status is `0` by default (even when deps are outdated); pass `--exit-code` to make a stale tree fail the build.
+
 ## Dependency rules
 
 Drop a committable `siz.config.json` at your repo root to declare which packages may be installed. Siz reads it and **blocks disallowed packages at install time** — both the interactive **Install** action and `siz bundle install`.
@@ -251,6 +267,7 @@ siz bundle rm my-stack          # delete (after confirmation)
 | `siz add <pkg...> --bundle <name>`                    | Record packages into a bundle instead of favoriting (`-D` / `--dev` for devDependencies) |
 | `siz bundle <list \| install \| show \| rm \| rename>` | Manage preset bundles (e.g. `siz bundle install my-stack`)                 |
 | `siz upgrade [level]` / `siz up`                      | Upgrade this project's dependencies (`major` \| `minor` \| `patch` \| `latest`) |
+| `siz outdated`                                        | Read-only report of outdated dependencies (`--json` for CI, `--exit-code` to gate) |
 | `siz list` / `siz ls`                                 | List favorited packages                                                    |
 | `siz rm <pkg>`                                        | Remove a favorite                                                          |
 | `siz help` / `siz --help`                             | Show help                                                                  |
@@ -304,6 +321,7 @@ Siz talks to a few different services depending on what you're doing:
 | Package search (interactive, `search`, `--list`, `--json`) | `registry.npmjs.org/-/v1/search` | Official npm registry |
 | Trust signals (deprecation, publish age, provenance) | `npm.antfu.dev` (via [`fast-npm-meta`](https://github.com/antfu/fast-npm-meta)) | Third-party hosted aggregator |
 | Upgrade version resolution (`siz upgrade`) | `npm.antfu.dev` (via `fast-npm-meta`) | Third-party hosted aggregator |
+| Outdated report (`siz outdated`) | `npm.antfu.dev` (via `fast-npm-meta`) | Third-party hosted aggregator |
 | Bundle latest-version resolution (`bundle install`) | `npm.antfu.dev` (via `fast-npm-meta`) | Third-party hosted aggregator |
 | Download-trend momentum (`↑`/`↓`) | `api.npmjs.org/downloads` | Official npm download-counts API |
 

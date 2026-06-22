@@ -97,6 +97,16 @@ export {
   type CatalogManifest,
 } from './core/catalog.ts'
 export {
+  analyzeOutdated,
+  buildOutdatedReport,
+  planManifestsOutdated,
+  planCatalogOutdated,
+  type OutdatedItem,
+  type OutdatedReport,
+  type ManifestOutdated,
+  type CatalogOutdatedItem,
+} from './core/outdated.ts'
+export {
   loadRules,
   evaluateRule,
   partitionByRules,
