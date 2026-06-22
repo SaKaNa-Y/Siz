@@ -3,7 +3,7 @@ import ansis from 'ansis'
 import type { DiffLevel, UpgradePlan, UpgradePlanItem } from '../core/upgrade.ts'
 
 /** Color a version by how big the bump is: red/major, yellow/minor, green/patch. */
-function colorForDiff(level: DiffLevel): (s: string) => string {
+export function colorForDiff(level: DiffLevel): (s: string) => string {
   switch (level) {
     case 'major':
     case 'premajor':

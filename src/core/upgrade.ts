@@ -93,12 +93,22 @@ export function currentVersionFromRange(range: string): string | null {
   }
 }
 
-function safeDiff(from: string, to: string): DiffLevel {
+/** semver bump classification between two versions, swallowing parse errors. */
+export function safeDiff(from: string, to: string): DiffLevel {
   try {
     return diff(from, to)
   } catch {
     return null
   }
+}
+
+/** Versions valid for resolution: stable, plus prereleases only if current is one. */
+export function stableCandidates(versions: string[], currentIsPre: boolean): string[] {
+  return versions.filter((v) => {
+    if (!valid(v)) return false
+    if (!currentIsPre && (prerelease(v)?.length ?? 0) > 0) return false
+    return true
+  })
 }
 
 /**
@@ -119,11 +129,7 @@ export function resolveTarget(
   mode: UpgradeMode,
 ): string | null {
   const currentIsPre = (prerelease(current)?.length ?? 0) > 0
-  const candidates = info.versions.filter((v) => {
-    if (!valid(v)) return false
-    if (!currentIsPre && (prerelease(v)?.length ?? 0) > 0) return false
-    return true
-  })
+  const candidates = stableCandidates(info.versions, currentIsPre)
   if (candidates.length === 0) return null
 
   let range: string

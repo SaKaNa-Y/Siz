@@ -17,6 +17,7 @@ import {
 } from './commands/bundle.ts'
 import { runInteractive } from './commands/interactive.ts'
 import { runList } from './commands/list.ts'
+import { runOutdated } from './commands/outdated.ts'
 import { runRemove } from './commands/remove.ts'
 import { runSearchPrint } from './commands/search.ts'
 import { runUpgrade } from './commands/upgrade.ts'
@@ -144,6 +145,19 @@ cli
       throw new Error(`Unknown upgrade level "${level}". Use: major | minor | patch | latest`)
     }
     await runUpgrade({ mode, recursive: opts.recursive, dryRun: opts.dryRun })
+  })
+
+cli
+  .command('outdated', 'Report outdated dependencies (read-only)')
+  .option('-r, --recursive', 'Scan every package.json under the current directory')
+  .option('--json', 'Output the report as JSON (for CI)')
+  .option('--exit-code', 'Exit 1 when any dependency is outdated')
+  .action(async (opts: { recursive?: boolean; json?: boolean; exitCode?: boolean }) => {
+    process.exitCode = await runOutdated({
+      recursive: opts.recursive,
+      json: opts.json,
+      exitCode: opts.exitCode,
+    })
   })
 
 cli

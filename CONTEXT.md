@@ -45,5 +45,13 @@ The two glob lists of a [[#dependency-rule|dependency rule]]. **Deny always wins
 **Audit** (`siz check`, planned):
 The Manage-track capability of **reporting** [[#dependency-rule|dependency-rule]] violations across a project's *existing* dependencies, regardless of how they got there — the counterpart to the install-time [[#guardrail|guardrail]]. Shares the same rule-evaluation core. Not yet built.
 
+**Outdated report** (`siz outdated`):
+The Manage-track, **read-only and non-interactive** report of dependencies whose registry `latest` is ahead of their [[#current-range-floor|current]] version. A sibling of the [[#audit|audit]] (both *report*, never mutate): it never writes a `package.json` or installs anything — it is the inspect-only counterpart to the interactive `siz upgrade`, reusing the same version-fetch and discovery core. Each entry is shown as **Current / Wanted / Latest** (Latest = the registry's `latest` dist-tag; Wanted = the highest version still satisfying the declared range).
+_Avoid_: "upgrade" (that writes), "check" (that is the [[#audit|audit]]).
+
+**Current** (range floor):
+A dependency's "current" version in siz is the **lowest version satisfying its `package.json` range** (e.g. `^18.2.0` → `18.2.0`), derived from the declared range — **not** the installed version in `node_modules`/a lockfile (which is what `npm outdated` reports). Shared by `siz upgrade` and the [[#outdated-report|outdated report]], so both agree; it also lets the report run on a fresh checkout before install. See ADR 0004.
+_Avoid_: "installed version", "resolved version" (those imply reading `node_modules`/the lockfile).
+
 **`siz.config.json`**:
 The project-local, committable file (nearest one, walking up from the working directory) that holds a project's [[#dependency-rule|dependency rules]]. A single root file governs the whole repository, including every workspace. Distinct from the user-global data store in the config dir, which holds favorites and bundles. Absent file ⇒ no rules; malformed file ⇒ siz fails closed (aborts) rather than permitting everything.
