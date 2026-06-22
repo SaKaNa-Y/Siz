@@ -10,7 +10,7 @@ Inspired by [`@rizumu/nai`](https://github.com/LittleSound/nai): Siz keeps nai's
 
 A check mark means the feature ships today; an empty box is planned, tagged **Next** (actively planned), **Later** (committed, unscheduled), or **Maybe** (exploratory).
 
-Siz is organized into three tracks — **Discover**, **Organize**, **Manage** — developed in parallel under one CLI. The Manage track aims to interoperate with the `ni` · `taze` ecosystem rather than compete with it.
+Siz is a unified package-management workflow layer: an interactive interface over your package manager (in the spirit of [`ni`](https://github.com/antfu-collective/ni)) plus [`taze`](https://github.com/antfu-collective/taze)-style dependency upgrades. It spans three complementary layers of one experience — **Discover** what to use, **Organize** what you keep, **Manage** what's installed — and is **interactive by default and fully scriptable with `--yes`**. It builds on antfu's [`package-manager-detector`](https://github.com/antfu-collective/package-manager-detector) (part of the `ni` project) and borrows `taze`'s ceiling-based upgrade semantics.
 
 ### Discover
 
@@ -24,27 +24,40 @@ Siz is organized into three tracks — **Discover**, **Organize**, **Manage** �
 
 ### Organize
 
-- [x] Favorite and categorize packages in a local list
-- [x] Heuristic auto-categorization when you add a package
-- [x] Preset bundles — named groups of packages you can install together in one step
+- [x] Favorites — a lightweight curated shortlist of packages you reach for, and the empty-box front door
+- [x] Heuristic auto-categorization when you favorite a package
+- [x] Bundles — named install-recipes (versions, dep types, preferred PM) you can install together in one step
 - [ ] **Later** — Local search and install history
 - [ ] **Maybe** — Team-shared presets
 
 ### Manage
 
-_Interoperates with the `ni` · `taze` ecosystem._
+**Install & run**
 
 - [x] Install via your package manager (npm / pnpm / yarn / bun / deno) — pick it at install time, with a per-package dependency vs devDependency toggle
+- [ ] **Next** — Direct project install / uninstall by name — `siz add <pkg>` installs, `siz rm <pkg>` uninstalls; favoriting moves to `--fav` _(breaking change to today's add/rm)_
+- [ ] **Next** — Non-interactive mode — `--yes` on every mutating command, for CI and scripts
+- [ ] **Later** — Run scripts — `siz run <script>` through the detected package manager
+- [ ] **Later** — Execute without installing — `siz x <pkg>` (npx / pnpm dlx / bunx)
+- [ ] **Later** — Clean / frozen install — lockfile-exact, reproducible installs (npm-ci style)
+
+**Upgrade & maintain**
+
 - [x] Upgrade project dependencies with ceiling semantics and `--dry-run`
 - [x] pnpm catalog upgrades — bump `catalog:` / `catalogs:` versions in `pnpm-workspace.yaml`
 - [x] Monorepo install & recursive upgrades — workspace picker on install, `siz upgrade -r`
 - [x] Workspace-aware discovery — honor declared `packages:` / `workspaces` globs, skip stray manifests
+- [ ] **Next** — Outdated report — `siz outdated`, read-only and non-interactive (`--json` for CI); reuses the upgrade version-fetch core
+- [ ] **Later** — `siz why <pkg>` — explain why a dependency is present / who pulled it in
+
+**Govern**
+
 - [x] Dependency rules — project-local, committable allow/deny config that gates installs
 - [ ] **Later** — `siz check` audit — report dependency-rule violations across existing `package.json`(s); CI-enforceable, reuses the rules engine
 - [ ] **Later** — Catalog management during install — `ni`-style `catalog:` writing
 - [ ] **Later** — Yarn & Bun catalog upgrades — extend catalog upgrades beyond pnpm
 - [ ] **Later** — Nested-workspace guard & root pins — `--ignore-other-workspaces`, `pnpm.overrides` / `resolutions`
-- [ ] **Maybe** — Dependency health audit (outdated / deprecated / vulnerable) — standalone report; most of its value is delivered by trust-aware discovery above
+- [ ] **Maybe** — Vulnerability scan — npm-audit parity; exits non-zero in CI
 
 ### Foundations
 
