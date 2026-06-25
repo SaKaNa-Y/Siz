@@ -6,6 +6,7 @@ import {
   fetchTrustSignals,
   formatPublishAge,
   isStale,
+  parseReplacement,
   STALE_YEARS,
 } from '../src/core/trust.ts'
 
@@ -83,6 +84,65 @@ describe('formatPublishAge', () => {
   })
 })
 
+describe('parseReplacement', () => {
+  it('extracts a bare name after "use ... instead"', () => {
+    expect(parseReplacement('use foo instead', 'old-pkg')).toEqual(['foo'])
+  })
+
+  it('extracts a back-tick-quoted name', () => {
+    expect(parseReplacement('This package is deprecated. Use `got` instead.', 'request')).toEqual([
+      'got',
+    ])
+  })
+
+  it('extracts multiple quoted names from an enumeration', () => {
+    expect(parseReplacement('use `date-fns` or `dayjs` instead', 'moment')).toEqual([
+      'date-fns',
+      'dayjs',
+    ])
+  })
+
+  it('handles "replaced by", "migrate to", and scoped names', () => {
+    expect(parseReplacement('Replaced by `@scope/new-pkg`.', 'old')).toEqual(['@scope/new-pkg'])
+    expect(parseReplacement('Please migrate to undici.', 'node-fetch')).toEqual(['undici'])
+  })
+
+  it('extracts a name from an npmjs.com package URL', () => {
+    expect(
+      parseReplacement('Deprecated. See https://www.npmjs.com/package/fast-glob', 'glob-pkg'),
+    ).toEqual(['fast-glob'])
+  })
+
+  it('excludes the package’s own name', () => {
+    expect(parseReplacement('use lodash instead', 'lodash')).toEqual([])
+  })
+
+  it('ignores version-only messages', () => {
+    expect(parseReplacement('Deprecated, please upgrade to v3', 'pkg')).toEqual([])
+    expect(parseReplacement('use ^2.0.0 instead', 'pkg')).toEqual([])
+  })
+
+  it('returns [] when no successor is named (moment-style) or message is empty', () => {
+    expect(
+      parseReplacement(
+        'We now generally consider this to be a legacy project in maintenance mode.',
+        'moment',
+      ),
+    ).toEqual([])
+    expect(parseReplacement(undefined, 'pkg')).toEqual([])
+    expect(parseReplacement('', 'pkg')).toEqual([])
+  })
+
+  it('does not grab bare prose after an enumeration separator', () => {
+    // "foo" is the trusted first token; the bare "we" continuation is dropped.
+    expect(parseReplacement('use foo and we recommend checking the docs', 'old')).toEqual(['foo'])
+  })
+
+  it('de-duplicates repeated suggestions', () => {
+    expect(parseReplacement('Use `got`. Migrate to got.', 'request')).toEqual(['got'])
+  })
+})
+
 describe('fetchTrustSignals', () => {
   it('maps deprecation, publish date, and provenance', async () => {
     const map = await fetchTrustSignals(['dep-pkg', 'plain-pkg'])
@@ -90,6 +150,7 @@ describe('fetchTrustSignals', () => {
       deprecated: 'use foo instead',
       publishedAt: '2024-01-01',
       provenance: undefined,
+      replacedBy: ['foo'],
     })
     expect(map.get('plain-pkg')).toEqual({
       deprecated: undefined,

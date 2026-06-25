@@ -52,6 +52,115 @@ export function formatPublishAge(publishedAt: string | undefined, now: number): 
   return `published ${years}y ago`
 }
 
+/**
+ * npm package-name shape (lowercase, optional `@scope/`). Used to validate
+ * replacement candidates extracted from a deprecation message.
+ */
+const PKG_NAME = String.raw`(?:@[a-z0-9](?:[a-z0-9-._]*[a-z0-9])?\/)?[a-z0-9](?:[a-z0-9-._]*[a-z0-9])?`
+
+/** A leading (optionally back-tick/quote-wrapped) package-name token. */
+const LEADING_TOKEN = new RegExp(String.raw`^[\s:]*([\`'"]?)(${PKG_NAME})\1`, 'i')
+
+/** A separator between enumerated names — "X or Y", "X, Y", "X and Y". */
+const ENUM_SEP = /^\s*(?:,|\/|or|and|&)\s+/i
+
+/** Replacement-intent trigger phrases; a name token is looked for right after. */
+const REPLACEMENT_TRIGGER =
+  /\b(?:please\s+)?(?:use|migrate\s+to|switch\s+to|moved?\s+to|moving\s+to|renamed\s+to|replaced?\s+(?:by|with)|superseded\s+by|instead\s+use)\s+/gi
+
+/** An npmjs.com package URL sometimes given as the successor. */
+const NPM_PACKAGE_URL = new RegExp(String.raw`npmjs\.com\/package\/(${PKG_NAME})`, 'gi')
+
+/** Bare (unquoted) English words that can follow a trigger but aren't packages. */
+const STOP_WORDS = new Set([
+  'the',
+  'a',
+  'an',
+  'this',
+  'that',
+  'our',
+  'their',
+  'its',
+  'it',
+  'we',
+  'you',
+  'they',
+  'version',
+  'versions',
+  'npm',
+  'latest',
+  'package',
+  'packages',
+  'module',
+  'library',
+  'instead',
+  'any',
+  'new',
+  'newer',
+  'official',
+  'maintained',
+])
+
+/** True when a candidate looks like a version (`v3`, `2`, `^2.0.0`), not a package. */
+function looksLikeVersion(token: string): boolean {
+  return /^v?\d/.test(token)
+}
+
+/**
+ * Extract high-confidence successor package name(s) from a deprecation message —
+ * what the maintainer pointed users to. Conservative by design: it only pulls a
+ * name from an explicit replacement trigger ("use X", "replaced by X", "migrate
+ * to X", an `npmjs.com/package/X` URL) or a back-tick/quoted name in that
+ * context, validates the npm-name shape, drops version-only tokens ("v3",
+ * "^2.0.0") and the package's own name, and otherwise returns `[]` rather than
+ * guess. Handles enumerations like "use `date-fns` or `dayjs` instead" (a bare
+ * first token is allowed, but enumerated continuations must be quoted to stay
+ * high-confidence). Pure — no I/O.
+ */
+export function parseReplacement(message: string | undefined, selfName: string): string[] {
+  if (!message) return []
+  const self = selfName.toLowerCase()
+  const out: string[] = []
+  const seen = new Set<string>()
+
+  const add = (raw: string): void => {
+    const name = raw.trim()
+    const lower = name.toLowerCase()
+    if (!name || looksLikeVersion(name) || lower === self || seen.has(lower)) return
+    seen.add(lower)
+    out.push(name)
+  }
+
+  // 1. Replacement trigger → enumerated name token(s).
+  REPLACEMENT_TRIGGER.lastIndex = 0
+  let trigger: RegExpExecArray | null
+  while ((trigger = REPLACEMENT_TRIGGER.exec(message))) {
+    let rest = message.slice(trigger.index + trigger[0].length)
+    let first = true
+    let tok: RegExpExecArray | null
+    while ((tok = LEADING_TOKEN.exec(rest))) {
+      const quoted = tok[1] !== ''
+      const name = tok[2]
+      // Bare tokens are only trusted as the first word and never if a stop-word;
+      // enumerated continuations must be quoted to avoid grabbing prose.
+      if (!quoted && (!first || STOP_WORDS.has(name.toLowerCase()))) break
+      add(name)
+      rest = rest.slice(tok[0].length)
+      const sep = ENUM_SEP.exec(rest)
+      if (!sep) break
+      rest = rest.slice(sep[0].length)
+      first = false
+    }
+  }
+
+  // 2. npmjs.com/package/<name> URLs.
+  NPM_PACKAGE_URL.lastIndex = 0
+  let url: RegExpExecArray | null
+  while ((url = NPM_PACKAGE_URL.exec(message))) add(url[1])
+
+  return out
+}
+
 /** Resolve after `ms`, yielding `value`. Used to bound a slow network call. */
 function timeout<T>(ms: number, value: T): Promise<T> {
   return new Promise((resolve) => {
@@ -83,10 +192,13 @@ export async function fetchTrustSignals(names: string[]): Promise<Map<string, Tr
             cache.set(r.name, {})
             continue
           }
+          const deprecated = r.deprecated || undefined
+          const replacedBy = deprecated ? parseReplacement(deprecated, r.name) : []
           cache.set(r.name, {
-            deprecated: r.deprecated || undefined,
+            deprecated,
             publishedAt: r.publishedAt ?? undefined,
             provenance: r.provenance || r.trustedPublisher || undefined,
+            replacedBy: replacedBy.length > 0 ? replacedBy : undefined,
           })
         }
       }
