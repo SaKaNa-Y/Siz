@@ -107,6 +107,12 @@ export interface TrustSignals {
   /** True when the package has npm provenance or a trusted publisher. */
   provenance?: boolean
   /**
+   * Successor package name(s) parsed (high-confidence only) from the deprecation
+   * message — what the maintainer pointed users to. Absent when not deprecated or
+   * when the message names no clear successor. Informational, never editorial.
+   */
+  replacedBy?: string[]
+  /**
    * Download-trend direction, derived from npm's download API (a different
    * endpoint than the search/metadata sources above). `undefined` when the
    * trend is flat, below the volume floor, or unavailable (e.g. scoped packages).

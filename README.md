@@ -19,7 +19,8 @@ Siz is a unified package-management workflow layer: an interactive interface ove
 - [x] GitHub-style qualifiers in queries (`keyword:` `author:` `scope:` `category:` `tag:`)
 - [x] Trust-aware discovery: deprecation, publish age, and provenance shown inline on each result, before install
 - [x] Download-trend signal — `↑`/`↓` download-count momentum inline on each result (scoped packages excepted)
-- [ ] **Later** — Smart replacement suggestions for deprecated or heavier packages
+- [x] Replacement suggestions for deprecated packages — `→ replaced by …`, parsed from the deprecation message (the successor the maintainer named)
+- [ ] **Later** — Lighter-alternative suggestions for heavy packages — a curated map of leaner swaps (e.g. `moment` → `dayjs`), with package-size signals
 - [ ] **Later** — AI-assisted search: opt-in LLM query expansion and result reranking
 
 ### Organize
@@ -147,7 +148,7 @@ To help you judge a package _before_ installing, Siz annotates each result with 
 | `⚑`   | **Stale** — its latest version was published more than 2 years ago  |
 | `✓`   | **Provenance** — the package has npm provenance or a trusted publisher |
 
-The glyphs show on every row so you can compare at a glance; the focused row expands them to words (e.g. `deprecated: no longer maintained · published 4y ago`). Signals are purely informational — they never block, filter, or reorder results. They load progressively (the list never waits on them) and degrade silently if the metadata service (`fast-npm-meta`, see [Data sources & network](#data-sources--network)) is unreachable. The `--list` and `--json` outputs include them too (`--json` adds `deprecated`, `publishedAt`, and `provenance` fields per result).
+The glyphs show on every row so you can compare at a glance; the focused row expands them to words (e.g. `deprecated: no longer maintained · published 4y ago`). When a deprecation message names a successor, that focused detail (and `--list`/`--json`) also surfaces it as `→ replaced by <pkg>` — parsed straight from the message, so it reflects what the maintainer pointed to, not a recommendation siz invents (a deprecated package whose message names no successor simply shows none). `--json` adds a `replacedBy` array per result. Signals are purely informational — they never block, filter, or reorder results. They load progressively (the list never waits on them) and degrade silently if the metadata service (`fast-npm-meta`, see [Data sources & network](#data-sources--network)) is unreachable. The `--list` and `--json` outputs include them too (`--json` adds `deprecated`, `publishedAt`, and `provenance` fields per result).
 
 ### Non-interactive output
 

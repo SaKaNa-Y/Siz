@@ -46,6 +46,7 @@ export {
   computeMomentum,
   isStale,
   formatPublishAge,
+  parseReplacement,
   STALE_YEARS,
   MOMENTUM_THRESHOLD,
   MOMENTUM_MIN_DOWNLOADS,

@@ -39,6 +39,9 @@ export function trustGlyphs(signals: TrustSignals, now: number): string {
 export function trustDetail(signals: TrustSignals, now: number): string {
   const parts: string[] = []
   if (signals.deprecated) parts.push(ansis.red(`deprecated: ${signals.deprecated}`))
+  if (signals.replacedBy?.length) {
+    parts.push(ansis.cyan(`→ replaced by ${signals.replacedBy.join(', ')}`))
+  }
   const stale = isStale(signals.publishedAt, now)
   const age = formatPublishAge(signals.publishedAt, now)
   if (age) parts.push(stale ? ansis.yellow(age) : ansis.dim(age))
