@@ -1,5 +1,19 @@
 # @sakana-y/siz
 
+## 0.3.1
+
+### Patch Changes
+
+- [#31](https://github.com/SaKaNa-Y/Siz/pull/31) [`41731ff`](https://github.com/SaKaNa-Y/Siz/commit/41731ffe787a6cad6573e8f094731beb4d15ec34) Thanks [@SaKaNa-Y](https://github.com/SaKaNa-Y)! - **Breaking:** `siz add` and `siz rm` now install / uninstall packages in the current project (delegating to the detected package manager), instead of managing favorites. Favoriting moves to a `--fav` flag on both commands.
+
+  - `siz add <pkg>` installs (ni-style: detects the package manager and runs, workspace picker only in a monorepo). Accepts version specifiers (`siz add react@18`, `siz add @scope/pkg@1.2.3`), a `-D`/`--dev` dev-dependency toggle, and honors the dependency-rules guardrail (`--no-rules` to bypass).
+  - `siz rm <pkg> [...packages]` uninstalls (multiple packages at once). It does **not** touch favorites.
+  - `siz add <pkg> --fav` favorites; `siz rm <pkg> --fav` removes a favorite. `--bundle <name>` still records into a bundle (mutually exclusive with `--fav`).
+
+  To keep the old behavior, add `--fav`: `siz add lodash` → `siz add lodash --fav`, `siz rm lodash` → `siz rm lodash --fav`.
+
+- [#29](https://github.com/SaKaNa-Y/Siz/pull/29) [`6e9b02a`](https://github.com/SaKaNa-Y/Siz/commit/6e9b02a4c0c33b2d0d1853d63ecc5925fa7bfaec) Thanks [@SaKaNa-Y](https://github.com/SaKaNa-Y)! - Surface replacement suggestions for deprecated packages in search results. When a deprecated package's npm deprecation message names a successor ("use `got` instead", "migrate to undici", an `npmjs.com/package/...` link), siz now extracts it and shows `→ replaced by <pkg>` in the focused-row detail and `--list`, and adds a `replacedBy` array to `--json`. Suggestions are parsed straight from the maintainer's message (high-confidence only) — siz never invents a recommendation, so a deprecated package whose message names no successor simply shows none.
+
 ## 0.3.0
 
 ### Minor Changes
