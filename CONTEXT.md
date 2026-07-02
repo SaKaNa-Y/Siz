@@ -40,7 +40,7 @@ A project's committed policy about which packages may enter it, declared in [[#s
 _Avoid_: "lockfile", "constraint" (versions are out of scope), "permission" (these are project-level, not user-level).
 
 **Guardrail**:
-The Manage-track enforcement of [[#dependency-rule|dependency rules]] at the moment a package would **enter the project** — i.e. the install paths only (the interactive Install action and `bundle install`). It blocks denied packages before install; it does not touch favorites, bundle records, or upgrades. Distinct from the [[#audit|audit]], which inspects packages already present.
+The Manage-track enforcement of [[#dependency-rule|dependency rules]] at the moment a package would **enter the project** — i.e. the install paths only (the interactive Install action, the direct `siz add` install, and `bundle install`). It blocks denied packages before install; it does not touch favorites, bundle records, upgrades, or uninstalls (`siz rm` — removing a package never adds one). Distinct from the [[#audit|audit]], which inspects packages already present.
 _Avoid_: "lint", "check" (that is the audit); "filter" (it blocks, it does not reorder or hide search results).
 
 **Allow / deny** (rule semantics):

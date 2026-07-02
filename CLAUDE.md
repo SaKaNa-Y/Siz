@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 The command surface is defined entirely by the `cac` registrations in `src/cli.ts` — that file is the single source of truth. The top-level help (`siz -h`) currently renders as below; the `siz/<version>` line is dynamic (sourced from `package.json`), and per-command options (e.g. `siz add --help`) are listed only under that command's own help.
 
 ```
-siz/0.2.1
+siz/0.3.0
 Smarter npm package search & management CLI — search, favorite and install packages.
 
 Usage:
@@ -18,12 +18,12 @@ Usage:
 Commands:
   [...query]                     Search npm packages by name (use qualifiers like keyword:cli)
   search [...query]              Full-text search including package descriptions
-  add <package> [...packages]    Favorite package(s) (use --bundle to add to a bundle instead)
+  add <package> [...packages]    Install package(s) into the project (--fav to favorite, --bundle to record)
   bundle <action> [arg1] [arg2]  Manage preset bundles
   upgrade [level]                Upgrade project dependencies (level: major | minor | patch | latest)
   outdated                       Report outdated dependencies (read-only)
   list                           List favorited packages
-  rm <package>                   Remove a favorite
+  rm <package> [...packages]     Uninstall package(s) from the project (--fav to unfavorite)
   help                           Show this help message
   version                        Show the installed version
 
@@ -38,13 +38,17 @@ Options:
 Examples:
   $ siz react form validation
   $ siz search "state management" --list
-  $ siz add zod vitest
+  $ siz add zod
+  $ siz add vitest -D
+  $ siz add react@18
+  $ siz rm lodash
+  $ siz add zod vitest --fav
   $ siz add react vue --bundle my-stack
-  $ siz add zod --strategy exact --bundle my-stack
   $ siz bundle install my-stack
   $ siz upgrade minor
-  $ siz list --category Testing
 ```
+
+Per-command help lists the mode flags: `siz add --help` shows `--fav`, `-b/--bundle`, `-D/--dev`, `-s/--strategy`, `--no-rules`; `siz rm --help` shows `--fav`.
 
 **Rule:** whenever a command, option, flag, alias, or example is added, changed, or removed in `src/cli.ts`, update this help block (and the relevant per-command help) to match — `siz -h` is part of the public surface and must never drift from the code.
 
@@ -97,14 +101,14 @@ Three layers, top to bottom: **Commands** orchestrate flow → **Core** holds lo
 **Entry / routing** — `src/cli.ts` uses `cac` to register subcommands and dispatch to `src/commands/*`:
 
 - bare `siz [query]` → `commands/interactive.ts` (name search; or `commands/search.ts` for `--list` / `--json`); `search [query]` is the same flow over descriptions (full-text)
-- `add <package…>` → `commands/add.ts`; favorites the package(s) by default. With `-b/--bundle <name>` it instead records them into that bundle (and does **not** favorite), `-D/--dev` marks bundle entries as devDependencies, `-s/--strategy <latest|exact|caret|tilde>` (validated in `cli.ts`, default `caret`) sets the recorded version strategy
+- `add <package…>` → `commands/add.ts`; a three-way, mutually-exclusive multiplexer. **Default: installs** the package(s) into the project via the shared `commands/install-runner.ts` (`--fav` + `--bundle` together throws). `--fav` favorites instead (resolves latest, suggests a category; version part dropped). `-b/--bundle <name>` records into that bundle (an explicit `@version` pins the entry `exact`, else `-s/--strategy <latest|exact|caret|tilde>`, default `caret`; `-D/--dev` → devDependencies). `-D/--dev` also marks install-mode deps as dev; `--no-rules` bypasses the guardrail on install. Specs (`react@18`, `@scope/pkg@1.2.3`) are split by `core/pm.parseSpec()` so name-keyed logic uses the bare name while the version flows to the PM
 - `bundle <action> [arg1] [arg2]` → `commands/bundle.ts`; cac matches on the leading token, so one command dispatches on `action`: `list`/`ls`, `install <name>`, `show <name>`, `rm <name>`, `rename <old> <new>`
-- `list`/`ls` (favorites; `-c/--category` filter), `rm` (remove a favorite)
+- `list`/`ls` (favorites; `-c/--category` filter); `rm <package…>` → `commands/remove.ts`; **default: uninstalls** the package(s) from the project (PM `remove`/`uninstall` via `core/pm.buildRemoveCommand()` — no rules, no confirm, monorepo target picker when ambiguous; orthogonal to favorites), `--fav` removes them from favorites instead
 - `upgrade [level]` / `up` (alias) → `commands/upgrade.ts`; `level` is `major | minor | patch | latest` (validated in `cli.ts`, defaults to `latest`); `-r/--recursive` discovers every `package.json` under cwd (monorepo mode); `--dry-run` previews without writing or installing
 - `outdated` → `commands/outdated.ts`; the read-only, non-interactive sibling of `upgrade` — reports Current/Wanted/Latest and **never writes or installs**. `-r/--recursive` (workspace-aware) and pnpm catalogs (always on) mirror `upgrade`'s scope; `--json` emits `{ outdated, skipped, summary }` to stdout for CI; `--exit-code` exits non-zero when anything is outdated (default exit `0`). `runOutdated()` returns the exit code, which `cli.ts` assigns to `process.exitCode`
 - `help`, `version` — thin subcommands that reuse cac's built-in `outputHelp()` / `outputVersion()`; the version is sourced from `package.json` (imported), which also backs the `--version` flag
 
-**Main data flow** (interactive search): `interactive.ts` calls `core/registry.searchPackages()`, which hits the npm registry, parses GitHub-style qualifiers via `core/query.ts`, and fuzzy-filters with `fzf`. Results render through `ui/search-prompt.ts` (live multiselect) + `ui/render.ts`. After each result set settles, `interactive.ts` fires `core/trust.fetchTrustSignals()` in the background (progressive, non-blocking) and re-renders rows with inline **trust signals** — `⚠` deprecated · `⚑` stale (>2y) · `✓` provenance — glyphs on every row (`ui/render.trustGlyphs`) and expanded detail on the focused row (`trustDetail`); the same signals enrich `--list`/`--json` output. Selected packages flow into local state via `core/store.ts` mutators, and install commands are built by `core/pm.ts`. On **Install**, `interactive.ts` first applies the dependency guardrail via `core/rules.loadRules()`/`partitionByRules()` (denied packages dropped with a `ui/render.formatBlockedNotice()`; all-blocked aborts non-zero; `--no-rules` bypasses), then calls `core/project.discoverManifests(cwd, { recursive: true })`; when more than one `package.json` is found it prompts via `ui/prompts.pickInstallTarget()` (label/order built by the pure `buildInstallTargetOptions()`) and runs `detectPM`/`runInstall` with `cwd` set to the chosen workspace directory (the cwd-into-dir approach — uniform across all PMs, including Bun). A single manifest installs in `process.cwd()` as before. `commands/bundle.runBundleInstall()` applies the same guardrail before building its install commands.
+**Main data flow** (interactive search): `interactive.ts` calls `core/registry.searchPackages()`, which hits the npm registry, parses GitHub-style qualifiers via `core/query.ts`, and fuzzy-filters with `fzf`. Results render through `ui/search-prompt.ts` (live multiselect) + `ui/render.ts`. After each result set settles, `interactive.ts` fires `core/trust.fetchTrustSignals()` in the background (progressive, non-blocking) and re-renders rows with inline **trust signals** — `⚠` deprecated · `⚑` stale (>2y) · `✓` provenance — glyphs on every row (`ui/render.trustGlyphs`) and expanded detail on the focused row (`trustDetail`); the same signals enrich `--list`/`--json` output. Selected packages flow into local state via `core/store.ts` mutators, and install commands are built by `core/pm.ts`. The **Install** action and the direct `siz add` command share `commands/install-runner.runInstallSelections()`, which applies the dependency guardrail via `commands/install-rules.applyInstallRules()` (→ `core/rules.loadRules()`/`partitionByRules()`; denied packages dropped with a `ui/render.formatBlockedNotice()`; all-blocked aborts non-zero; `--no-rules` bypasses), then calls `core/project.discoverManifests(cwd, { recursive: true })`; when more than one `package.json` is found it prompts via `ui/prompts.pickInstallTarget()` (label/order built by the pure `buildInstallTargetOptions()`) and runs `detectPM`/`runInstall` with `cwd` set to the chosen workspace directory (the cwd-into-dir approach — uniform across all PMs, including Bun). A single manifest installs in `process.cwd()`. The interactive path opts into a PM picker + confirm (`pickPM`/`confirm`); the direct `siz add` path runs ni-style (detect and run). `commands/bundle.runBundleInstall()` applies the same guardrail before building its install commands.
 
 **Upgrade flow** (`siz upgrade`): `commands/upgrade.ts` discovers manifests via `core/project.discoverManifests()` — the nearest `package.json` by default, or (with `-r`) workspace-aware: when a workspace is declared (`loadWorkspaceGlobs()` reads pnpm's `packages:` or an npm/yarn `workspaces` field) only the declared members plus the root are scanned, otherwise it falls back to a Taze-style glob of every `package.json` under cwd (ignoring `node_modules`/`dist`/`.git`). It batch-fetches registry versions for the union of dep names (`collectQueryNames()` → `core/upgrade.fetchVersionInfo()`, `fast-npm-meta`), then `planManifests()` partitions each manifest's deps with `buildUpgradePlan()` under **ceiling** semantics (`patch`→newest within `major.minor`/`~`, `minor`→newest within `major`/`^`, `major`/`latest`→newest overall; `0.x` is treated as breaking, so `minor`/`patch` never cross a `0.x` boundary). Resolution is **independent per package** (Taze-style; no cross-package consensus). It also discovers the nearest `pnpm-workspace.yaml` (walking up, regardless of `-r`) via `core/catalog.discoverCatalog()` and plans each `catalog:` / `catalogs:` entry with `core/upgrade.planCatalog()` (reusing `analyzeDep`). The user multiselects from one flat list (package.json rows tagged with their dir when recursive; catalog rows tagged `catalog` / `catalog:<name>`) in a `@clack/prompts` flow; selections are grouped back by file — package.json rewritten via `core/project.applyRangeEdits()`, catalog entries via `core/catalog.applyCatalogEdits()` (format-preserving YAML edits, scoped by indentation) — each written atomically with `writeManifest()`, then a single `core/pm.buildSyncCommand()` / `runInstall()` runs at the root. Non-registry specifiers (`workspace:`, `catalog:`, npm aliases, git/file/link, URLs) and unparseable ranges are skipped, not touched — the `package.json` `catalog:` refs are left alone because the version is bumped in the catalog itself. Yarn/Bun catalogs and `pnpm.overrides` are not yet handled (see the README's **Features** roadmap).
 
@@ -116,20 +120,20 @@ Three layers, top to bottom: **Commands** orchestrate flow → **Core** holds lo
 - `query.ts` — parses qualifiers: `keyword:`, `author:`, `scope:`, `category:`, `tag:` (`tag:`/`tags:` is an alias of `keyword:` — folded into npm's native `keywords:` search)
 - `store.ts` — JSON persistence in the user config dir, non-destructive migrations (schema v3: a single `favorites` map, no two-tier track/favorite), and favorite mutators (`addFavorite`, `removeFavorite`, `listFavorites`, `setCategory`)
 - `categories.ts` — heuristic categorization (Frontend, Backend, Testing, …) from name/description/keywords
-- `pm.ts` — detect npm/pnpm/yarn/bun/deno and build install commands (incl. dev deps) and the sync/install command (`buildSyncCommand`, `runInstall`) used by upgrade; uses `package-manager-detector`
+- `pm.ts` — detect npm/pnpm/yarn/bun/deno and build install commands (incl. dev deps), the uninstall command (`buildRemoveCommand`, via `resolveCommand(agent, 'uninstall', …)`), and the sync/install command (`buildSyncCommand`, `runInstall`) used by upgrade; `parseSpec()` splits a `pkg@version` spec (scope-aware) into name + version; uses `package-manager-detector`
 - `meta.ts` — fast version resolution via `fast-npm-meta`
 - `trust.ts` — trust signals (deprecation, publish age, provenance) for search results via a single `getLatestVersionBatch(..., { metadata: true })` call (`fetchTrustSignals`); `retry: false` + a short timeout + a session memo, degrading silently. Pure helpers `isStale` (>2y) / `formatPublishAge` take an injected `now` for testability
 - `project.ts` — locate the nearest `package.json` (`loadProjectManifest`) or discover workspace members (`discoverManifests`, via `tinyglobby`): workspace-aware when a definition exists (`loadWorkspaceGlobs()` reads pnpm `packages:` / npm-yarn `workspaces`), else a brute-force glob. Collects deps from `dependencies`/`devDependencies` and rewrites version ranges in-place without reformatting (brace-matched block edits, atomic writes); `isUpgradableSpecifier()` filters out non-registry protocols
 - `upgrade.ts` — analyze each dep against registry versions and build an upgrade plan with ceiling semantics (`UpgradeMode`); `collectQueryNames()`/`planManifests()` extend this across multiple manifests (`ManifestPlan`); `planCatalog()`/`collectCatalogNames()` do the same for pnpm catalog entries (`CatalogPlanItem`); types `DepAnalysis`, `UpgradePlan`, `VersionInfo`
 - `outdated.ts` — read-only analysis for `siz outdated`: `analyzeOutdated()` classifies one dep as outdated / skipped / up-to-date (Current = range floor, Wanted = `maxSatisfying` over the literal range, Latest = dist-tag); `buildOutdatedReport()`, `planManifestsOutdated()` (`ManifestOutdated`), and `planCatalogOutdated()` (`CatalogOutdatedItem`) span manifests + catalog. Reuses `currentVersionFromRange`/`isUpgradableSpecifier`; reports complex ranges (unlike `upgrade.ts`, which must skip them to rewrite safely). Never writes
 - `catalog.ts` — locate the nearest `pnpm-workspace.yaml` (`discoverCatalog`), parse its `catalog:` / `catalogs:` blocks into `CatalogEntry[]` (via the `yaml` parser), and rewrite catalog versions in place with indentation-scoped, format-preserving string edits (`applyCatalogEdits`); `readWorkspacePackages()` exposes the file's `packages:` globs for manifest discovery
-- `rules.ts` — project-local dependency guardrail. Reads `siz.config.json` (nearest via `findUp`, JSON, `{ rules: { allow, deny } }`) with `loadRules()` (throws on malformed JSON — fail-closed; `undefined` when absent). Pure, reusable evaluation core (for a future `siz check` audit): `evaluateRule()` / `partitionByRules()` apply `permitted = (allow empty OR matches allow) AND NOT matches deny` (deny wins); `globToRegExp()`/`matchesPattern()` do flat-string name globbing (`*` = any chars, slash-agnostic). Enforced at the two install paths only (interactive **Install** + `bundle install`); `--no-rules` bypasses
+- `rules.ts` — project-local dependency guardrail. Reads `siz.config.json` (nearest via `findUp`, JSON, `{ rules: { allow, deny } }`) with `loadRules()` (throws on malformed JSON — fail-closed; `undefined` when absent). Pure, reusable evaluation core (for a future `siz check` audit): `evaluateRule()` / `partitionByRules()` apply `permitted = (allow empty OR matches allow) AND NOT matches deny` (deny wins); `globToRegExp()`/`matchesPattern()` do flat-string name globbing (`*` = any chars, slash-agnostic). Enforced at the three install paths only (interactive **Install**, direct `siz add`, and `bundle install`); `--no-rules` bypasses. Uninstall (`siz rm`) is not gated
 - `paths.ts` — config dir resolution (Windows `%APPDATA%\siz`, Unix `~/.config/siz`)
 - `types.ts` — shared interfaces: `FavoritePackage`, `SizData`, `SearchResult`
 
 **UI** (`src/ui/`): `render.ts` (score bars, category labels, result/favorite cards, `formatBlockedNotice` for rule-blocked packages), `search-prompt.ts` (type-as-you-search multiselect), `prompts.ts` (`@clack/prompts` confirm/action menus, package-manager picker), `upgrade-render.ts` (upgrade summary line, version deltas, option labels; exports `colorForDiff`), `outdated-render.ts` (aligned Current/Wanted/Latest table + summary line, reusing `colorForDiff`), `highlight.ts` (keyword highlighting). Color via `ansis`.
 
-**Library surface** — `src/index.ts` re-exports core functions (`searchPackages`, `addFavorite`, `detectPM`, `buildInstallCommand`, `listFavorites`, the `project.ts`/`upgrade.ts`/`catalog.ts` upgrade functions and types, the `outdated.ts` report functions and types, …). Keep it in sync when core signatures change.
+**Library surface** — `src/index.ts` re-exports core functions (`searchPackages`, `addFavorite`, `detectPM`, `buildInstallCommand`, `buildRemoveCommand`, `parseSpec`, `listFavorites`, the `project.ts`/`upgrade.ts`/`catalog.ts` upgrade functions and types, the `outdated.ts` report functions and types, …). Keep it in sync when core signatures change.
 
 **Data store** — persisted to `data.json` in the config dir (`%APPDATA%\siz\data.json` on Windows, `~/.config/siz/data.json` on Unix). Tests under `test/*.test.ts` mirror the core modules.
 
