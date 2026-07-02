@@ -11,24 +11,15 @@ import type {
 } from '../core/types.ts'
 
 import { normalizeCategory, suggestCategory } from '../core/categories.ts'
-import { buildInstallCommands, detectPM, formatCommand, runInstall } from '../core/pm.ts'
-import { discoverManifests, relativeScope } from '../core/project.ts'
 import { parseQuery } from '../core/query.ts'
 import { type SearchMode, searchPackages } from '../core/registry.ts'
 import { addFavorite, addToBundle, listFavorites } from '../core/store.ts'
 import { fetchDownloadTrend, fetchTrustSignals } from '../core/trust.ts'
 import { highlightKeywords } from '../ui/highlight.ts'
-import {
-  clack,
-  ensure,
-  pickInstallTarget,
-  pickOrCreateBundle,
-  pickPackageManager,
-  pickSetAction,
-} from '../ui/prompts.ts'
+import { clack, ensure, pickOrCreateBundle, pickSetAction } from '../ui/prompts.ts'
 import { categoryLabel, trustDetail, trustGlyphs, trustLegend } from '../ui/render.ts'
 import { searchPrompt, type SearchOption } from '../ui/search-prompt.ts'
-import { applyInstallRules } from './install-rules.ts'
+import { runInstallSelections } from './install-runner.ts'
 
 /** Versions seen during search, so favoriting can store them. */
 const versionCache = new Map<string, string>()
@@ -227,48 +218,9 @@ async function runSetAction(
       return
 
     case 'install': {
-      // In a monorepo, let the user pick which package to install into; otherwise
-      // (single package.json) keep installing in the current directory as before.
-      const cwd = process.cwd()
-      const manifests = await discoverManifests(cwd, { recursive: true })
-      const targetDir = manifests.length > 1 ? await pickInstallTarget(manifests, cwd) : cwd
-
-      // Dependency-rules guardrail: drop denied packages before building the
-      // install command. Rules come from the nearest siz.config.json walking up
-      // from the current directory (a single root config governs all installs).
-      const installable = applyInstallRules(selections, (s) => s.name, {
-        cwd,
-        noRules: opts.noRules,
-        abortOutro: 'Aborted.',
-      })
-      if (!installable) return
-
-      const agent = await pickPackageManager(await detectPM(targetDir))
-      const cmds = buildInstallCommands(agent, installable)
-      const styled = cmds.map((c) => ansis.cyan(formatCommand(c)))
-      const scope = relativeScope(cwd, targetDir)
-      const where = scope ? ` in ${ansis.bold(scope)}` : ''
-      const ok = ensure(
-        await clack.confirm({
-          message: `Run ${styled.join(' && ')}${where}?`,
-          initialValue: true,
-        }),
-      )
-      if (!ok) {
-        clack.outro('Aborted.')
-        return
-      }
-      clack.log.step(`Installing with ${ansis.bold(agent)}`)
-      for (const cmd of cmds) {
-        // Run installs sequentially and bail on the first failure (no parallelism).
-        // eslint-disable-next-line no-await-in-loop
-        const code = await runInstall(cmd, targetDir)
-        if (code !== 0) {
-          clack.log.error(`Install exited with code ${code}`)
-          return
-        }
-      }
-      clack.outro('Done.')
+      // The interactive path keeps its PM picker and confirm; the shared runner
+      // handles monorepo target selection, the rules guardrail, and execution.
+      await runInstallSelections(selections, { noRules: opts.noRules, pickPM: true, confirm: true })
       return
     }
 

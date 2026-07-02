@@ -4,7 +4,9 @@ import {
   buildBundleInstallCommands,
   buildInstallCommand,
   buildInstallCommands,
+  buildRemoveCommand,
   formatCommand,
+  parseSpec,
 } from '../src/core/pm.ts'
 
 describe('buildInstallCommand', () => {
@@ -104,5 +106,46 @@ describe('buildBundleInstallCommands', () => {
 
   it('returns no commands for an empty selection', () => {
     expect(buildBundleInstallCommands('npm', [])).toEqual([])
+  })
+})
+
+describe('buildRemoveCommand', () => {
+  it('uses npm uninstall', () => {
+    expect(formatCommand(buildRemoveCommand('npm', ['lodash']))).toBe('npm uninstall lodash')
+  })
+
+  it('uses pnpm/yarn/bun/deno remove', () => {
+    expect(formatCommand(buildRemoveCommand('pnpm', ['lodash']))).toBe('pnpm remove lodash')
+    expect(formatCommand(buildRemoveCommand('yarn', ['lodash']))).toBe('yarn remove lodash')
+    expect(formatCommand(buildRemoveCommand('bun', ['lodash']))).toBe('bun remove lodash')
+    expect(formatCommand(buildRemoveCommand('deno', ['lodash']))).toBe('deno remove lodash')
+  })
+
+  it('removes multiple packages in one command', () => {
+    expect(formatCommand(buildRemoveCommand('npm', ['react', 'vue']))).toBe(
+      'npm uninstall react vue',
+    )
+  })
+})
+
+describe('parseSpec', () => {
+  it('returns the bare name when there is no version', () => {
+    expect(parseSpec('react')).toEqual({ name: 'react' })
+  })
+
+  it('splits a name and version', () => {
+    expect(parseSpec('react@18')).toEqual({ name: 'react', version: '18' })
+  })
+
+  it('keeps a scoped name intact without a version', () => {
+    expect(parseSpec('@scope/pkg')).toEqual({ name: '@scope/pkg' })
+  })
+
+  it('splits a scoped name and version', () => {
+    expect(parseSpec('@scope/pkg@1.2.3')).toEqual({ name: '@scope/pkg', version: '1.2.3' })
+  })
+
+  it('treats a dist-tag as the version part', () => {
+    expect(parseSpec('react@next')).toEqual({ name: 'react', version: 'next' })
   })
 })

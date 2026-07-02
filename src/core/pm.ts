@@ -100,6 +100,31 @@ export function buildBundleInstallCommands(
 }
 
 /**
+ * Build the uninstall command for an agent (pure — no side effects). The
+ * manager's own `remove`/`uninstall` edits package.json, so no manifest
+ * mutation is needed. Falls back to npm semantics for an unknown agent.
+ */
+export function buildRemoveCommand(agent: Agent, names: string[]): InstallCommand {
+  const resolved = resolveCommand(agent, 'uninstall', names)
+  if (!resolved) return { command: 'npm', args: ['uninstall', ...names] }
+  return { command: resolved.command, args: resolved.args }
+}
+
+/**
+ * Split a package spec into its bare name and optional version part, scope-aware:
+ * `react@18` → `{ name: 'react', version: '18' }`, `@scope/pkg@1.2.3` →
+ * `{ name: '@scope/pkg', version: '1.2.3' }`, `@scope/pkg` and `react` → no
+ * version. Used to key name-based logic (rules, favorites, bundles) off a spec
+ * that may carry a version, while the version still flows through to the PM.
+ */
+export function parseSpec(spec: string): { name: string; version?: string } {
+  const at = spec.lastIndexOf('@')
+  // `at <= 0` covers both no `@` (react) and a leading-only `@` (@scope/pkg).
+  if (at <= 0) return { name: spec }
+  return { name: spec.slice(0, at), version: spec.slice(at + 1) }
+}
+
+/**
  * Build the plain install/sync command (e.g. `pnpm install`) — applies the
  * version ranges already written in package.json without adding new packages.
  * Used by `siz upgrade`, where `add` would re-resolve to latest and clobber the

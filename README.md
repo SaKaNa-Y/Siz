@@ -36,7 +36,7 @@ Siz is a unified package-management workflow layer: an interactive interface ove
 **Install & run**
 
 - [x] Install via your package manager (npm / pnpm / yarn / bun / deno) — pick it at install time, with a per-package dependency vs devDependency toggle
-- [ ] **Next** — Direct project install / uninstall by name — `siz add <pkg>` installs, `siz rm <pkg>` uninstalls; favoriting moves to `--fav` _(breaking change to today's add/rm)_
+- [x] Direct project install / uninstall by name — `siz add <pkg>` installs, `siz rm <pkg>` uninstalls; favoriting moves to `--fav`
 - [ ] **Next** — Non-interactive mode — `--yes` on every mutating command, for CI and scripts
 - [ ] **Later** — Run scripts — `siz run <script>` through the detected package manager
 - [ ] **Later** — Execute without installing — `siz x <pkg>` (npx / pnpm dlx / bunx)
@@ -88,16 +88,22 @@ siz vite
 # Full-text search, including package descriptions
 siz search vite
 
-# Favorite packages you already use
-siz add lodash zod vitest
+# Install packages into the current project (delegates to your package manager)
+siz add lodash zod
+siz add vitest -D          # as a devDependency
+siz add react@18          # a specific version
+
+# Uninstall
+siz rm lodash
+
+# Favorite packages you reach for (--fav), then browse them
+siz add zod vitest --fav
+siz list
+siz list --category Testing
 
 # Group packages into a reusable bundle, then install it anywhere
 siz add react vue --bundle my-stack
 siz bundle install my-stack
-
-# Browse your favorites, filter by category
-siz list
-siz list --category Testing
 
 # Upgrade this project's dependencies
 siz upgrade minor
@@ -232,11 +238,29 @@ siz bundle install my-stack --no-rules
 
 Behavior at the edges: **no `siz.config.json` → no restrictions** (rules are opt-in); a **malformed `siz.config.json` → siz aborts with a parse error** rather than silently letting everything through (a broken policy must fail closed). Rules gate what you *add* through siz; reporting violations in dependencies you *already have* is the job of the planned `siz check` audit.
 
+## Install & uninstall
+
+`siz add <pkg>` installs packages into the current project, and `siz rm <pkg>` uninstalls them — both delegate to your detected package manager (npm / pnpm / yarn / bun / deno). They run directly, in the spirit of [`ni`](https://github.com/antfu-collective/ni): siz detects the manager and runs, echoing the exact command — no extra prompts unless a monorepo makes the target ambiguous.
+
+```bash
+siz add zod                 # <pm> add zod
+siz add vitest -D           # as a devDependency
+siz add react@18            # a version, dist-tag, or scoped spec flows through to the PM
+siz add react vue           # multiple at once
+siz rm lodash left-pad      # uninstall (multiple at once)
+```
+
+In a **monorepo** — when more than one `package.json` is found under the current directory — siz first asks **which package to install into** (or remove from) and runs the manager in that workspace's directory. With a single `package.json`, there's no extra prompt; with none, the manager runs in the current directory (creating one as it normally would).
+
+Installs honor the [dependency rules](#dependency-rules) guardrail: a denied package is dropped with a notice, and if every package is blocked the command aborts non-zero. Pass `--no-rules` to bypass. Uninstall is never gated — removing a package can't violate a policy about what may enter the project — and it's orthogonal to favorites: `siz rm react` uninstalls but leaves the favorite; `siz rm react --fav` removes the favorite without uninstalling.
+
+`siz add` has three mutually exclusive modes — plain (install), `--fav` (favorite, see [Favorites](#favorites)), and `--bundle <name>` (record into a bundle, see [Bundles](#bundles)).
+
 ## Bundles
 
 A **bundle** is a reusable, named collection of packages you can install in one step — handy for the stack you reach for on every new project.
 
-Record packages straight into a bundle with `--bundle` (this records into the bundle rather than favoriting):
+Record packages straight into a bundle with `--bundle` (this records into the bundle rather than installing):
 
 ```bash
 # Add packages straight into a bundle (created if it doesn't exist)
@@ -244,7 +268,7 @@ siz add react react-dom --bundle my-stack
 siz add vitest --bundle my-stack -D     # -D / --dev records it as a devDependency
 ```
 
-Without `--bundle`, `siz add` favorites the packages instead (see [Favorites](#favorites)).
+Without `--bundle` or `--fav`, `siz add` installs the packages into the current project instead (see [Install & uninstall](#install--uninstall)).
 
 Then manage and install bundles:
 
@@ -264,13 +288,14 @@ siz bundle rm my-stack          # delete (after confirmation)
 | ----------------------------------------------------- | -------------------------------------------------------------------------- |
 | `siz` / `siz <query>`                                 | Open the live search box, searching by name                                |
 | `siz search <query>`                                  | Full-text search, including package descriptions                           |
-| `siz add <pkg...>`                                    | Favorite package(s); resolves version and suggests a category              |
-| `siz add <pkg...> --bundle <name>`                    | Record packages into a bundle instead of favoriting (`-D` / `--dev` for devDependencies) |
+| `siz add <pkg...>`                                    | Install package(s) into the project (`-D` / `--dev` for devDependencies, `--no-rules` to bypass rules) |
+| `siz add <pkg...> --fav`                              | Favorite package(s) instead of installing; resolves version, suggests a category |
+| `siz add <pkg...> --bundle <name>`                    | Record packages into a bundle instead of installing (`-D` / `--dev` for devDependencies) |
+| `siz rm <pkg...>`                                     | Uninstall package(s) from the project (`--fav` to remove a favorite instead) |
 | `siz bundle <list \| install \| show \| rm \| rename>` | Manage preset bundles (e.g. `siz bundle install my-stack`)                 |
 | `siz upgrade [level]` / `siz up`                      | Upgrade this project's dependencies (`major` \| `minor` \| `patch` \| `latest`) |
 | `siz outdated`                                        | Read-only report of outdated dependencies (`--json` for CI, `--exit-code` to gate) |
 | `siz list` / `siz ls`                                 | List favorited packages                                                    |
-| `siz rm <pkg>`                                        | Remove a favorite                                                          |
 | `siz help` / `siz --help`                             | Show help                                                                  |
 | `siz version` / `siz --version`                       | Show the installed version                                                 |
 
@@ -282,13 +307,13 @@ siz list --category Testing    # by category
 
 ### Categories
 
-Siz ships with a starter set of categories and auto-suggests one when you add a package, based on its name, description, and keywords:
+Siz ships with a starter set of categories and auto-suggests one when you favorite a package, based on its name, description, and keywords:
 
 `Frontend` · `Backend` · `Build Tools` · `Testing` · `Database` · `State Management` · `UI` · `DevTools` · `CLI Tools`
 
 ### Favorites
 
-Favorite the packages you reach for often with `siz add <pkg>`, or with the **Favorite** action after a search. They show up in `siz list` (alphabetically), and pressing **Enter** on an empty search box opens them as the front door. Remove one with `siz rm <pkg>`.
+Favorite the packages you reach for often with `siz add <pkg> --fav`, or with the **Favorite** action after a search. They show up in `siz list` (alphabetically), and pressing **Enter** on an empty search box opens them as the front door. Remove one with `siz rm <pkg> --fav`. Favorites are name-only, so a version in the spec (`siz add react@18 --fav`) is ignored.
 
 ## Library usage
 
