@@ -57,5 +57,9 @@ _Avoid_: "upgrade" (that writes), "check" (that is the [[#audit|audit]]).
 A dependency's "current" version in siz is the **lowest version satisfying its `package.json` range** (e.g. `^18.2.0` → `18.2.0`), derived from the declared range — **not** the installed version in `node_modules`/a lockfile (which is what `npm outdated` reports). Shared by `siz upgrade` and the [[#outdated-report|outdated report]], so both agree; it also lets the report run on a fresh checkout before install. See ADR 0004.
 _Avoid_: "installed version", "resolved version" (those imply reading `node_modules`/the lockfile).
 
+**Dependency scan**:
+The Manage-track **discovery step** shared by `siz upgrade`, the [[#outdated-report|outdated report]], and the planned [[#audit|audit]]: a project's manifests (the nearest `package.json`, or the workspace members when recursive) plus the nearest pnpm catalog, and the **deduped set of upgradable names** to query the registry for. **Discovery only** — it fetches nothing itself; the single batched registry request happens after. Keeps the three commands agreeing on *what a project's dependencies are* by construction.
+_Avoid_: "fetch", "resolve versions" (the scan names *what* to query; the batched metadata call does the fetching).
+
 **`siz.config.json`**:
 The project-local, committable file (nearest one, walking up from the working directory) that holds a project's [[#dependency-rule|dependency rules]]. A single root file governs the whole repository, including every workspace. Distinct from the user-global data store in the config dir, which holds favorites and bundles. Absent file ⇒ no rules; malformed file ⇒ siz fails closed (aborts) rather than permitting everything.

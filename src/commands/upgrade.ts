@@ -6,21 +6,11 @@ import type { CatalogManifest } from '../core/catalog.ts'
 import type { ProjectManifest } from '../core/project.ts'
 import type { CatalogPlanItem, UpgradeMode, UpgradePlan, UpgradePlanItem } from '../core/upgrade.ts'
 
-import { applyCatalogEdits, discoverCatalog } from '../core/catalog.ts'
+import { applyCatalogEdits } from '../core/catalog.ts'
 import { buildSyncCommand, detectPM, formatCommand, runInstall } from '../core/pm.ts'
-import {
-  applyRangeEdits,
-  discoverManifests,
-  relativeScope,
-  writeManifest,
-} from '../core/project.ts'
-import {
-  collectCatalogNames,
-  collectQueryNames,
-  fetchVersionInfo,
-  planCatalog,
-  planManifests,
-} from '../core/upgrade.ts'
+import { applyRangeEdits, relativeScope, writeManifest } from '../core/project.ts'
+import { discoverProjectDeps } from '../core/resolve.ts'
+import { fetchVersionInfo, planCatalog, planManifests } from '../core/upgrade.ts'
 import { clack, ensure, pickPackageManager } from '../ui/prompts.ts'
 import {
   renderUpgradeSummary,
@@ -86,19 +76,15 @@ export async function runUpgrade(opts: UpgradeOptions = {}): Promise<void> {
 
   clack.intro(ansis.bold.cyan('siz upgrade'))
 
-  const manifests = await discoverManifests(cwd, { recursive: opts.recursive })
-  // pnpm catalogs live in the nearest pnpm-workspace.yaml (workspace-global), so
-  // discover them by walking up regardless of recursive mode.
-  const catalog = discoverCatalog(cwd)
+  const { manifests, catalog, queryNames } = await discoverProjectDeps(cwd, {
+    recursive: opts.recursive,
+  })
   if (manifests.length === 0 && !catalog) {
     clack.log.error('No package.json found in this directory.')
     clack.outro('Nothing to upgrade.')
     return
   }
 
-  const queryNames = [
-    ...new Set([...collectQueryNames(manifests), ...(catalog ? collectCatalogNames(catalog) : [])]),
-  ]
   if (queryNames.length === 0) {
     clack.log.info('No upgradable dependencies found.')
     clack.outro('Nothing to upgrade.')

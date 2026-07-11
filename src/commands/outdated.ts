@@ -4,10 +4,10 @@ import process from 'node:process'
 import type { DiffLevel } from '../core/upgrade.ts'
 import type { OutdatedRow } from '../ui/outdated-render.ts'
 
-import { discoverCatalog } from '../core/catalog.ts'
 import { planCatalogOutdated, planManifestsOutdated } from '../core/outdated.ts'
-import { discoverManifests, relativeScope } from '../core/project.ts'
-import { collectCatalogNames, collectQueryNames, fetchVersionInfo } from '../core/upgrade.ts'
+import { relativeScope } from '../core/project.ts'
+import { discoverProjectDeps } from '../core/resolve.ts'
+import { fetchVersionInfo } from '../core/upgrade.ts'
 import { renderOutdatedSummary, renderOutdatedTable } from '../ui/outdated-render.ts'
 
 export interface OutdatedOptions {
@@ -45,8 +45,9 @@ interface ReportRow {
 export async function runOutdated(opts: OutdatedOptions = {}): Promise<number> {
   const cwd = opts.cwd ?? process.cwd()
 
-  const manifests = await discoverManifests(cwd, { recursive: opts.recursive })
-  const catalog = discoverCatalog(cwd)
+  const { manifests, catalog, queryNames } = await discoverProjectDeps(cwd, {
+    recursive: opts.recursive,
+  })
   if (manifests.length === 0 && !catalog) {
     if (opts.json) {
       console.log(
@@ -62,9 +63,6 @@ export async function runOutdated(opts: OutdatedOptions = {}): Promise<number> {
     return 0
   }
 
-  const queryNames = [
-    ...new Set([...collectQueryNames(manifests), ...(catalog ? collectCatalogNames(catalog) : [])]),
-  ]
   const versions = await fetchVersionInfo(queryNames)
 
   const planned = planManifestsOutdated(manifests, versions)
