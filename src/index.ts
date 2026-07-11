@@ -69,6 +69,7 @@ export {
   type ProjectManifest,
   type WorkspaceGlobs,
 } from './core/project.ts'
+export { discoverProjectDeps, type DependencyScan } from './core/resolve.ts'
 export {
   buildUpgradePlan,
   planManifests,
