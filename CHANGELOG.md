@@ -1,5 +1,11 @@
 # @sakana-y/siz
 
+## 0.3.2
+
+### Patch Changes
+
+- [#32](https://github.com/SaKaNa-Y/Siz/pull/32) [`9c5f9d3`](https://github.com/SaKaNa-Y/Siz/commit/9c5f9d38e455644be951b5c3d1e6e9ebaead0979) Thanks [@SaKaNa-Y](https://github.com/SaKaNa-Y)! - Add a shared dependency-scan step for the Manage track. `siz upgrade` and `siz outdated` now discover a project's manifests, nearest pnpm catalog, and the deduped set of upgradable names to query through one `discoverProjectDeps()` helper, so the two commands agree on what a project's dependencies are by construction. Exposed from the library as `discoverProjectDeps` / `DependencyScan`.
+
 ## 0.3.1
 
 ### Patch Changes
