@@ -1,30 +1,23 @@
-import type { ReleaseType } from 'semver'
-
-import { getVersionsBatch } from 'fast-npm-meta'
-import { diff, gt, maxSatisfying, minVersion, prerelease, valid } from 'semver'
+import { gt, maxSatisfying, prerelease } from 'semver'
 
 import type { CatalogManifest } from './catalog.ts'
+import type { CompareSkip, DiffLevel, VersionInfo } from './compare.ts'
 import type { DepType, ProjectDep, ProjectManifest } from './project.ts'
 
-import { isUpgradableSpecifier } from './project.ts'
+import {
+  applyPrefix,
+  compareDep,
+  currentVersionFromRange,
+  detectRangePrefix,
+  safeDiff,
+  stableCandidates,
+} from './compare.ts'
 
 /** Upgrade ceiling: how far a version is allowed to move. */
 export type UpgradeMode = 'major' | 'minor' | 'patch' | 'latest'
 
-/** semver bump classification between two versions, or null when indeterminate. */
-export type DiffLevel = ReleaseType | null
-
 /** Why a dependency was excluded from the upgradable set. */
-export type SkipReason = 'protocol' | 'not-found' | 'unparseable' | 'up-to-date'
-
-/** Registry version data for a single package. */
-export interface VersionInfo {
-  name: string
-  versions: string[]
-  latest: string | null
-  /** False when the package isn't on the registry. */
-  exists: boolean
-}
+export type SkipReason = CompareSkip | 'up-to-date'
 
 /** The result of analyzing one dependency against the registry under a mode. */
 export interface DepAnalysis {
@@ -57,58 +50,6 @@ export interface UpgradePlan {
   upgradable: UpgradePlanItem[]
   upToDate: DepAnalysis[]
   skipped: { name: string; depType: DepType; reason: SkipReason }[]
-}
-
-export type RangePrefix = '^' | '~' | '' | 'complex'
-
-/** Classify the leading operator of a version range. */
-export function detectRangePrefix(range: string): RangePrefix {
-  const r = range.trim()
-  if (/^\^\d/.test(r)) return '^'
-  if (/^~\d/.test(r)) return '~'
-  // A bare, fully-valid version (e.g. `1.2.3`) is an exact pin.
-  if (valid(r)) return ''
-  // Anything else (`>=2 <3`, `1.x`, `a || b`, hyphen ranges) is too complex to rewrite safely.
-  return 'complex'
-}
-
-/** Re-apply a detected prefix to a resolved version. */
-export function applyPrefix(prefix: RangePrefix, version: string): string {
-  switch (prefix) {
-    case '^':
-      return `^${version}`
-    case '~':
-      return `~${version}`
-    default:
-      return version
-  }
-}
-
-/** The lowest version satisfying a range, or null if it can't be parsed. */
-export function currentVersionFromRange(range: string): string | null {
-  try {
-    return minVersion(range)?.version ?? null
-  } catch {
-    return null
-  }
-}
-
-/** semver bump classification between two versions, swallowing parse errors. */
-export function safeDiff(from: string, to: string): DiffLevel {
-  try {
-    return diff(from, to)
-  } catch {
-    return null
-  }
-}
-
-/** Versions valid for resolution: stable, plus prereleases only if current is one. */
-export function stableCandidates(versions: string[], currentIsPre: boolean): string[] {
-  return versions.filter((v) => {
-    if (!valid(v)) return false
-    if (!currentIsPre && (prerelease(v)?.length ?? 0) > 0) return false
-    return true
-  })
 }
 
 /**
@@ -146,7 +87,12 @@ export function resolveTarget(
   return maxSatisfying(candidates, range, { includePrerelease: currentIsPre })
 }
 
-/** Analyze a single dependency against its registry info under a mode. */
+/**
+ * Analyze a single dependency against its registry info under a mode. Builds on
+ * the neutral {@link compareDep} facts, then applies upgrade semantics: a
+ * `complex` range is skipped (it can't be rewritten safely), and a concrete
+ * target is resolved under the mode ceiling.
+ */
 export function analyzeDep(
   dep: ProjectDep,
   info: VersionInfo | undefined,
@@ -155,26 +101,40 @@ export function analyzeDep(
   const base = { name: dep.name, depType: dep.depType, range: dep.range }
   const none = { current: null, latest: null, target: null, diff: null, latestDiff: null }
 
-  if (!isUpgradableSpecifier(dep.range)) {
-    return { ...base, ...none, skip: 'protocol' }
-  }
-  if (!info || !info.exists) {
-    return { ...base, ...none, current: currentVersionFromRange(dep.range), skip: 'not-found' }
-  }
-
-  const prefix = detectRangePrefix(dep.range)
-  const current = currentVersionFromRange(dep.range)
-  if (current === null || prefix === 'complex') {
-    return { ...base, ...none, current, latest: info.latest, skip: 'unparseable' }
+  const result = compareDep(dep, info)
+  if (result.kind === 'skipped') {
+    if (result.reason === 'protocol') return { ...base, ...none, skip: 'protocol' }
+    if (result.reason === 'not-found') {
+      return { ...base, ...none, current: currentVersionFromRange(dep.range), skip: 'not-found' }
+    }
+    return { ...base, ...none, latest: info?.latest ?? null, skip: 'unparseable' }
   }
 
-  const latest = info.latest
-  const latestDiff = latest && valid(latest) ? safeDiff(current, latest) : null
-  const target = resolveTarget(current, info, mode)
-  if (!target || !gt(target, current)) {
-    return { ...base, current, latest, target: null, diff: null, latestDiff, skip: 'up-to-date' }
+  const f = result.facts
+  if (f.prefix === 'complex') {
+    return { ...base, ...none, current: f.current, latest: f.latest, skip: 'unparseable' }
   }
-  return { ...base, current, latest, target, diff: safeDiff(current, target), latestDiff }
+
+  const target = info ? resolveTarget(f.current, info, mode) : null
+  if (!target || !gt(target, f.current)) {
+    return {
+      ...base,
+      current: f.current,
+      latest: f.latest,
+      target: null,
+      diff: null,
+      latestDiff: f.latestDiff,
+      skip: 'up-to-date',
+    }
+  }
+  return {
+    ...base,
+    current: f.current,
+    latest: f.latest,
+    target,
+    diff: safeDiff(f.current, target),
+    latestDiff: f.latestDiff,
+  }
 }
 
 /** Build the upgradable item for a non-skipped analysis: attach the prefixed `proposed` range. */
@@ -213,20 +173,6 @@ export interface ManifestPlan {
 }
 
 /**
- * Unique upgradable dependency names across every manifest — the set to fetch
- * registry data for in a single batched request.
- */
-export function collectQueryNames(manifests: ProjectManifest[]): string[] {
-  const names = new Set<string>()
-  for (const m of manifests) {
-    for (const dep of m.deps) {
-      if (isUpgradableSpecifier(dep.range)) names.add(dep.name)
-    }
-  }
-  return [...names]
-}
-
-/**
  * Plan each manifest independently against a shared registry map. Resolution is
  * per-package (Taze-style): the same dependency in two manifests is analyzed
  * separately, though it draws from the same {@link VersionInfo} data.
@@ -249,18 +195,6 @@ export interface CatalogPlanItem extends UpgradePlanItem {
 }
 
 /**
- * Unique upgradable catalog entry names — joined with {@link collectQueryNames}
- * so catalog versions share the single batched registry request.
- */
-export function collectCatalogNames(catalog: CatalogManifest): string[] {
-  const names = new Set<string>()
-  for (const entry of catalog.entries) {
-    if (isUpgradableSpecifier(entry.range)) names.add(entry.name)
-  }
-  return [...names]
-}
-
-/**
  * Plan each catalog entry against the shared registry map, reusing the same
  * per-package analysis as package.json deps. Each entry is treated as a
  * standalone `dependencies` range; only those with a concrete upgrade are kept.
@@ -278,24 +212,4 @@ export function planCatalog(
     items.push({ ...toUpgradePlanItem(a), catalog: entry.catalog })
   }
   return items
-}
-
-/** Fetch registry version lists for a set of package names (one batched request). */
-export async function fetchVersionInfo(names: string[]): Promise<Map<string, VersionInfo>> {
-  const map = new Map<string, VersionInfo>()
-  if (names.length === 0) return map
-  const results = await getVersionsBatch(names, { throw: false })
-  for (const r of results) {
-    if ('error' in r) {
-      map.set(r.name, { name: r.name, versions: [], latest: null, exists: false })
-    } else {
-      map.set(r.name, {
-        name: r.name,
-        versions: r.versions ?? [],
-        latest: r.distTags?.latest ?? null,
-        exists: true,
-      })
-    }
-  }
-  return map
 }

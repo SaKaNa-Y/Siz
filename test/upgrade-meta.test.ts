@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { fetchVersionInfo } from '../src/core/upgrade.ts'
+import { fetchVersionInfo } from '../src/core/compare.ts'
 
 // Mock the network layer: getVersionsBatch returns a mix of found packages and
 // a PackageError (404) so we can assert the mapping in fetchVersionInfo.

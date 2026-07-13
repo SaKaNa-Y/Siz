@@ -1,6 +1,6 @@
 import type { Bundle, BundleDepType, BundlePackage, VersionStrategy } from './types.ts'
 
-import { applyPrefix, fetchVersionInfo, type RangePrefix } from './upgrade.ts'
+import { applyPrefix, fetchVersionInfo, type RangePrefix } from './compare.ts'
 
 /** A single resolved package from a bundle, ready to install. */
 export interface BundleInstallItem {

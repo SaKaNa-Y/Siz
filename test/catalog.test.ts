@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { CatalogManifest } from '../src/core/catalog.ts'
-import type { VersionInfo } from '../src/core/upgrade.ts'
+import type { VersionInfo } from '../src/core/compare.ts'
 
 import { applyCatalogEdits, loadCatalogManifest } from '../src/core/catalog.ts'
 import { planCatalog } from '../src/core/upgrade.ts'

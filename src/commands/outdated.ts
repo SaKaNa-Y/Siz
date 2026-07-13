@@ -1,13 +1,13 @@
 import { dirname, relative } from 'node:path'
 import process from 'node:process'
 
-import type { DiffLevel } from '../core/upgrade.ts'
+import type { DiffLevel } from '../core/compare.ts'
 import type { OutdatedRow } from '../ui/outdated-render.ts'
 
+import { fetchVersionInfo } from '../core/compare.ts'
 import { planCatalogOutdated, planManifestsOutdated } from '../core/outdated.ts'
 import { relativeScope } from '../core/project.ts'
 import { discoverProjectDeps } from '../core/resolve.ts'
-import { fetchVersionInfo } from '../core/upgrade.ts'
 import { renderOutdatedSummary, renderOutdatedTable } from '../ui/outdated-render.ts'
 
 export interface OutdatedOptions {

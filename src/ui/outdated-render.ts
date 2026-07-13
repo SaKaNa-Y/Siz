@@ -1,6 +1,6 @@
 import ansis from 'ansis'
 
-import type { DiffLevel } from '../core/upgrade.ts'
+import type { DiffLevel } from '../core/compare.ts'
 
 import { colorForDiff } from './upgrade-render.ts'
 

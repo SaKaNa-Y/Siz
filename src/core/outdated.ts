@@ -1,11 +1,10 @@
-import { gt, maxSatisfying, prerelease, valid } from 'semver'
+import { gt, maxSatisfying, valid } from 'semver'
 
 import type { CatalogManifest } from './catalog.ts'
+import type { CompareSkip, DiffLevel, VersionInfo } from './compare.ts'
 import type { DepType, ProjectDep, ProjectManifest } from './project.ts'
-import type { DiffLevel, SkipReason, VersionInfo } from './upgrade.ts'
 
-import { isUpgradableSpecifier } from './project.ts'
-import { currentVersionFromRange, safeDiff, stableCandidates } from './upgrade.ts'
+import { compareDep, safeDiff } from './compare.ts'
 
 /**
  * One dependency that is behind the registry: its declared `current` (range
@@ -31,7 +30,7 @@ export interface OutdatedItem {
 /** A partitioned, read-only view of every dependency against the registry. */
 export interface OutdatedReport {
   outdated: OutdatedItem[]
-  skipped: { name: string; depType: DepType; reason: SkipReason }[]
+  skipped: { name: string; depType: DepType; reason: CompareSkip }[]
   /** Count of dependencies already at the latest version. */
   upToDate: number
 }
@@ -39,42 +38,38 @@ export interface OutdatedReport {
 /** The analysis of one dependency: an outdated item, a skip reason, or up-to-date. */
 type OutdatedAnalysis =
   | { kind: 'outdated'; item: OutdatedItem }
-  | { kind: 'skipped'; reason: SkipReason }
+  | { kind: 'skipped'; reason: CompareSkip }
   | { kind: 'up-to-date' }
 
 /**
- * Analyze one dependency against its registry info. Unlike the upgrade path,
- * this is read-only: it never rewrites a range, so it can report **complex**
- * ranges (`>=2 <3`, `1.x`, …) too — `wanted` is simply the highest version
- * satisfying the literal range. Prereleases are excluded unless `current` is
- * itself a prerelease (mirrors `resolveTarget`).
+ * Analyze one dependency against its registry info. Builds on the neutral
+ * {@link compareDep} facts. Unlike the upgrade path, this is read-only: it never
+ * rewrites a range, so it can report **complex** ranges (`>=2 <3`, `1.x`, …)
+ * too — `wanted` is simply the highest version satisfying the literal range.
+ * Prereleases are excluded unless `current` is itself a prerelease.
  */
 export function analyzeOutdated(dep: ProjectDep, info: VersionInfo | undefined): OutdatedAnalysis {
-  if (!isUpgradableSpecifier(dep.range)) return { kind: 'skipped', reason: 'protocol' }
-  if (!info || !info.exists) return { kind: 'skipped', reason: 'not-found' }
+  const result = compareDep(dep, info)
+  if (result.kind === 'skipped') return { kind: 'skipped', reason: result.reason }
 
-  const current = currentVersionFromRange(dep.range)
-  if (current === null) return { kind: 'skipped', reason: 'unparseable' }
+  const f = result.facts
+  const latest = f.latest
+  if (!latest || !valid(latest) || !gt(latest, f.current)) return { kind: 'up-to-date' }
 
-  const latest = info.latest
-  if (!latest || !valid(latest) || !gt(latest, current)) return { kind: 'up-to-date' }
-
-  const currentIsPre = (prerelease(current)?.length ?? 0) > 0
-  const candidates = stableCandidates(info.versions, currentIsPre)
   const wanted =
-    maxSatisfying(candidates, dep.range, { includePrerelease: currentIsPre }) ?? current
+    maxSatisfying(f.candidates, dep.range, { includePrerelease: f.currentIsPre }) ?? f.current
 
   return {
     kind: 'outdated',
     item: {
-      name: dep.name,
-      depType: dep.depType,
-      range: dep.range,
-      current,
+      name: f.name,
+      depType: f.depType,
+      range: f.range,
+      current: f.current,
       wanted,
       latest,
-      wantedDiff: safeDiff(current, wanted),
-      latestDiff: safeDiff(current, latest),
+      wantedDiff: safeDiff(f.current, wanted),
+      latestDiff: f.latestDiff,
     },
   }
 }

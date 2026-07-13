@@ -69,25 +69,36 @@ export {
   type ProjectManifest,
   type WorkspaceGlobs,
 } from './core/project.ts'
-export { discoverProjectDeps, type DependencyScan } from './core/resolve.ts'
 export {
-  buildUpgradePlan,
-  planManifests,
+  discoverProjectDeps,
   collectQueryNames,
-  analyzeDep,
-  resolveTarget,
+  collectCatalogNames,
+  type DependencyScan,
+} from './core/resolve.ts'
+export {
+  compareDep,
+  fetchVersionInfo,
   currentVersionFromRange,
   detectRangePrefix,
   applyPrefix,
-  fetchVersionInfo,
+  type VersionInfo,
+  type DepComparison,
+  type CompareResult,
+  type CompareSkip,
+  type DiffLevel,
+  type RangePrefix,
+} from './core/compare.ts'
+export {
+  buildUpgradePlan,
+  planManifests,
+  analyzeDep,
+  resolveTarget,
   planCatalog,
-  collectCatalogNames,
   type UpgradeMode,
   type UpgradePlan,
   type UpgradePlanItem,
   type ManifestPlan,
   type DepAnalysis,
-  type VersionInfo,
   type CatalogPlanItem,
 } from './core/upgrade.ts'
 export {
