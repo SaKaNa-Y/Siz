@@ -1,18 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
+import type { VersionInfo } from '../src/core/compare.ts'
 import type { ProjectDep, ProjectManifest } from '../src/core/project.ts'
-import type { VersionInfo } from '../src/core/upgrade.ts'
 
-import {
-  analyzeDep,
-  applyPrefix,
-  buildUpgradePlan,
-  collectQueryNames,
-  currentVersionFromRange,
-  detectRangePrefix,
-  planManifests,
-  resolveTarget,
-} from '../src/core/upgrade.ts'
+import { applyPrefix, currentVersionFromRange, detectRangePrefix } from '../src/core/compare.ts'
+import { collectQueryNames } from '../src/core/resolve.ts'
+import { analyzeDep, buildUpgradePlan, planManifests, resolveTarget } from '../src/core/upgrade.ts'
 
 function info(
   name: string,

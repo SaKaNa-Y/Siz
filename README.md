@@ -56,7 +56,7 @@ Siz is a unified package-management workflow layer: an interactive interface ove
 - [x] pnpm catalog upgrades — bump `catalog:` / `catalogs:` versions in `pnpm-workspace.yaml`
 - [x] Monorepo install & recursive upgrades — workspace picker on install, `siz upgrade -r`
 - [x] Workspace-aware discovery — honor declared `packages:` / `workspaces` globs, skip stray manifests
-- [x] Outdated report — `siz outdated`, read-only and non-interactive (`--json` for CI, `--exit-code` to gate); reuses the upgrade version-fetch core
+- [x] Outdated report — `siz outdated`, read-only and non-interactive (`--json` for CI, `--exit-code` to gate); shares the version-fetch and comparison core with `siz upgrade`
 - [ ] **Next** — Upgrade filters — `--include` / `--exclude` name globs to scope which dependencies are considered before the list renders (`taze` parity)
 - [ ] **Later** — Per-package upgrade modes — pin a package to a fixed level (e.g. always minor) regardless of the global level
 - [ ] **Later** — Trust signals in the outdated report — surface deprecated/stale flags alongside version drift
@@ -205,7 +205,7 @@ Specifiers that aren't plain registry ranges — `workspace:`, `catalog:`, npm a
 
 ## Outdated report
 
-`siz outdated` is the **read-only, non-interactive** counterpart to `siz upgrade`: it reports which dependencies are behind the registry and **never writes or installs anything**. It reuses the same version-fetch core (and the same workspace- and catalog-aware discovery), so it covers exactly what `siz upgrade` could act on.
+`siz outdated` is the **read-only, non-interactive** counterpart to `siz upgrade`: it reports which dependencies are behind the registry and **never writes or installs anything**. Both commands specialize one shared registry-comparison core (and the same workspace- and catalog-aware discovery), so `outdated` covers exactly what `siz upgrade` could act on.
 
 ```bash
 siz outdated              # Current / Wanted / Latest table for the nearest package.json

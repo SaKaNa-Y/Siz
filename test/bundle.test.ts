@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
 import type { Bundle, BundlePackage } from '../src/core/types.ts'
-import type { VersionInfo } from '../src/core/upgrade.ts'
+import type { VersionInfo } from '../src/core/compare.ts'
 
 /** Build a Bundle from a map of name → {strategy, depType}. */
 function makeBundle(entries: Record<string, Omit<BundlePackage, 'name'>>): Bundle {
@@ -11,8 +11,8 @@ function makeBundle(entries: Record<string, Omit<BundlePackage, 'name'>>): Bundl
 }
 
 // Mock only fetchVersionInfo; keep the real applyPrefix and everything else.
-vi.mock('../src/core/upgrade.ts', async (importActual) => {
-  const actual = await importActual<typeof import('../src/core/upgrade.ts')>()
+vi.mock('../src/core/compare.ts', async (importActual) => {
+  const actual = await importActual<typeof import('../src/core/compare.ts')>()
   return {
     ...actual,
     fetchVersionInfo: vi.fn(async (names: string[]) => {
@@ -66,7 +66,7 @@ describe('resolveBundleInstall', () => {
   })
 
   it('uses a pinned version verbatim without resolving from the registry', async () => {
-    const { fetchVersionInfo } = await import('../src/core/upgrade.ts')
+    const { fetchVersionInfo } = await import('../src/core/compare.ts')
     vi.mocked(fetchVersionInfo).mockClear()
 
     const bundle = makeBundle({

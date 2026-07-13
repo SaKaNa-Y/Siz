@@ -7,10 +7,11 @@ import type { ProjectManifest } from '../core/project.ts'
 import type { CatalogPlanItem, UpgradeMode, UpgradePlan, UpgradePlanItem } from '../core/upgrade.ts'
 
 import { applyCatalogEdits } from '../core/catalog.ts'
+import { fetchVersionInfo } from '../core/compare.ts'
 import { buildSyncCommand, detectPM, formatCommand, runInstall } from '../core/pm.ts'
 import { applyRangeEdits, relativeScope, writeManifest } from '../core/project.ts'
 import { discoverProjectDeps } from '../core/resolve.ts'
-import { fetchVersionInfo, planCatalog, planManifests } from '../core/upgrade.ts'
+import { planCatalog, planManifests } from '../core/upgrade.ts'
 import { clack, ensure, pickPackageManager } from '../ui/prompts.ts'
 import {
   renderUpgradeSummary,
