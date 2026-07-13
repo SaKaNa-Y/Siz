@@ -10,7 +10,7 @@ Inspired by [`@rizumu/nai`](https://github.com/LittleSound/nai): Siz keeps nai's
 
 A check mark means the feature ships today; an empty box is planned, tagged **Next** (actively planned), **Later** (committed, unscheduled), or **Maybe** (exploratory).
 
-Siz is a unified package-management workflow layer: an interactive interface over your package manager (in the spirit of [`ni`](https://github.com/antfu-collective/ni)) plus [`taze`](https://github.com/antfu-collective/taze)-style dependency upgrades. It spans three complementary layers of one experience — **Discover** what to use, **Organize** what you keep, **Manage** what's installed — and is **interactive by default and fully scriptable with `--yes`**. It builds on antfu's [`package-manager-detector`](https://github.com/antfu-collective/package-manager-detector) (part of the `ni` project) and borrows `taze`'s ceiling-based upgrade semantics.
+Siz is a unified package-management workflow layer: an interactive interface over your package manager (in the spirit of [`ni`](https://github.com/antfu-collective/ni)) plus [`taze`](https://github.com/antfu-collective/taze)-style dependency upgrades. It spans three complementary layers of one experience — **Discover** what to use, **Organize** what you keep, **Manage** what's installed — and is **interactive by default and scriptable today** (via `--json` / `--list` and direct `add` / `rm`), with full `--yes` coverage of every mutating command on the way. It builds on antfu's [`package-manager-detector`](https://github.com/antfu-collective/package-manager-detector) (part of the `ni` project) and borrows `taze`'s ceiling-based upgrade semantics.
 
 ### Discover
 
@@ -20,16 +20,23 @@ Siz is a unified package-management workflow layer: an interactive interface ove
 - [x] Trust-aware discovery: deprecation, publish age, and provenance shown inline on each result, before install
 - [x] Download-trend signal — `↑`/`↓` download-count momentum inline on each result (scoped packages excepted)
 - [x] Replacement suggestions for deprecated packages — `→ replaced by …`, parsed from the deprecation message (the successor the maintainer named)
-- [ ] **Later** — Lighter-alternative suggestions for heavy packages — a curated map of leaner swaps (e.g. `moment` → `dayjs`), with package-size signals
+- [ ] **Later** — Package-size signal — install / bundle size shown inline on each result, before install
+- [ ] **Later** — License signal — the package's license shown inline (a legal/compatibility fact, distinct from the health-oriented trust signals)
+- [ ] **Later** — Ships-types signal — flag whether a package bundles its own TypeScript types or needs a separate `@types/*`
+- [ ] **Later** — Lighter-alternative suggestions for heavy packages — a curated map of leaner swaps (e.g. `moment` → `dayjs`), leaning on the package-size signal
 - [ ] **Later** — AI-assisted search: opt-in LLM query expansion and result reranking
+- [ ] **Maybe** — Comparison view — mark 2–3 packages in interactive search and compare them side by side (downloads, size, last publish, license)
 
 ### Organize
 
 - [x] Favorites — a lightweight curated shortlist of packages you reach for, and the empty-box front door
 - [x] Heuristic auto-categorization when you favorite a package
-- [x] Bundles — named install-recipes (versions, dep types, preferred PM) you can install together in one step
+- [x] Bundles — named recipes that record versions, dep types, and preferred PM, installable together in one step
+- [ ] **Later** — Peer/optional bundle install — install a bundle's peer/optional deps as their true type (today the types are recorded but installed as regular dependencies)
+- [ ] **Later** — Export / import favorites & bundles — shareable JSON, the concrete basis for team-shared presets
 - [ ] **Later** — Local search and install history
-- [ ] **Maybe** — Team-shared presets
+- [ ] **Maybe** — Seed a bundle from the current project — snapshot the current `package.json` deps into a named bundle
+- [ ] **Maybe** — Team-shared presets — built on export / import
 
 ### Manage
 
@@ -38,6 +45,7 @@ Siz is a unified package-management workflow layer: an interactive interface ove
 - [x] Install via your package manager (npm / pnpm / yarn / bun / deno) — pick it at install time, with a per-package dependency vs devDependency toggle
 - [x] Direct project install / uninstall by name — `siz add <pkg>` installs, `siz rm <pkg>` uninstalls; favoriting moves to `--fav`
 - [ ] **Next** — Non-interactive mode — `--yes` on every mutating command, for CI and scripts
+- [ ] **Later** — Interactive uninstall picker — `siz rm` with no args opens a picker over installed deps, making removal as interactive as install
 - [ ] **Later** — Run scripts — `siz run <script>` through the detected package manager
 - [ ] **Later** — Execute without installing — `siz x <pkg>` (npx / pnpm dlx / bunx)
 - [ ] **Later** — Clean / frozen install — lockfile-exact, reproducible installs (npm-ci style)
@@ -49,6 +57,8 @@ Siz is a unified package-management workflow layer: an interactive interface ove
 - [x] Monorepo install & recursive upgrades — workspace picker on install, `siz upgrade -r`
 - [x] Workspace-aware discovery — honor declared `packages:` / `workspaces` globs, skip stray manifests
 - [x] Outdated report — `siz outdated`, read-only and non-interactive (`--json` for CI, `--exit-code` to gate); reuses the upgrade version-fetch core
+- [ ] **Next** — Upgrade filters — `--include` / `--exclude` name globs to scope which dependencies are considered before the list renders (`taze` parity)
+- [ ] **Later** — Per-package upgrade modes — pin a package to a fixed level (e.g. always minor) regardless of the global level
 - [ ] **Later** — Trust signals in the outdated report — surface deprecated/stale flags alongside version drift
 - [ ] **Later** — `siz why <pkg>` — explain why a dependency is present / who pulled it in
 
@@ -59,6 +69,7 @@ Siz is a unified package-management workflow layer: an interactive interface ove
 - [ ] **Later** — Catalog management during install — `ni`-style `catalog:` writing
 - [ ] **Later** — Yarn & Bun catalog upgrades — extend catalog upgrades beyond pnpm
 - [ ] **Later** — Nested-workspace guard & root pins — `--ignore-other-workspaces`, `pnpm.overrides` / `resolutions`
+- [ ] **Maybe** — License policy rules — allow/deny by license, extending the dependency-rules engine (makes the guardrail metadata-fetch dependent — today it is pure name-matching)
 - [ ] **Maybe** — Vulnerability scan — npm-audit parity; exits non-zero in CI
 
 ### Foundations
