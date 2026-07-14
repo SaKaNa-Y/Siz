@@ -54,6 +54,13 @@ export {
   MOMENTUM_MIN_DOWNLOADS,
 } from './core/trust.ts'
 export {
+  fetchInstallSizes,
+  fetchBundleSize,
+  formatBytes,
+  isHeavy,
+  HEAVY_INSTALL_BYTES,
+} from './core/size.ts'
+export {
   findPackageJson,
   loadProjectManifest,
   loadManifestAt,

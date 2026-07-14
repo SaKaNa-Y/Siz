@@ -7,17 +7,26 @@ import type {
   BundlePackage,
   FavoritePackage,
   SearchResult,
+  SizeSignals,
   TrustSignals,
 } from '../core/types.ts'
 
 import { normalizeCategory, suggestCategory } from '../core/categories.ts'
 import { parseQuery } from '../core/query.ts'
 import { type SearchMode, searchPackages } from '../core/registry.ts'
+import { fetchBundleSize, fetchInstallSizes } from '../core/size.ts'
 import { addFavorite, addToBundle, listFavorites } from '../core/store.ts'
 import { fetchDownloadTrend, fetchTrustSignals } from '../core/trust.ts'
 import { highlightKeywords } from '../ui/highlight.ts'
 import { clack, ensure, pickOrCreateBundle, pickSetAction } from '../ui/prompts.ts'
-import { categoryLabel, trustDetail, trustGlyphs, trustLegend } from '../ui/render.ts'
+import {
+  categoryLabel,
+  sizeDetail,
+  sizeInline,
+  trustDetail,
+  trustGlyphs,
+  trustLegend,
+} from '../ui/render.ts'
 import { searchPrompt, type SearchOption } from '../ui/search-prompt.ts'
 import { runInstallSelections } from './install-runner.ts'
 
@@ -91,6 +100,12 @@ async function openSearchBox(seedQuery: string | undefined, mode: SearchMode): P
   // Trust signals arrive progressively (a second fetch after each result set),
   // read live at render time so rows fill in once they resolve.
   const signalsByName = new Map<string, TrustSignals>()
+  // Size signals: install size arrives eagerly (background, all rows); bundle
+  // size arrives lazily per focused row (see onFocus). Both read live at render.
+  const sizeByName = new Map<string, SizeSignals>()
+  // Names we've already kicked a (focus-only) bundle-size fetch for — guards the
+  // per-render onFocus from re-requesting or looping.
+  const bundleRequested = new Set<string>()
   // Fixed for the session — publish-age strings don't drift over a few minutes,
   // and this avoids a Date.now() per row on every keystroke re-render.
   const now = Date.now()
@@ -102,9 +117,28 @@ async function openSearchBox(seedQuery: string | undefined, mode: SearchMode): P
     footer: trustLegend(),
     badge: (name) => (depTypes.get(name) ? ` ${ansis.cyan('[dev]')}` : ` ${ansis.dim('[dep]')}`),
     signals: (name) => {
-      const s = signalsByName.get(name)
-      if (!s) return undefined
-      return { glyphs: trustGlyphs(s, now), detail: trustDetail(s, now) }
+      const trust = signalsByName.get(name)
+      const size = sizeByName.get(name)
+      if (!trust && !size) return undefined
+      const glyphs = [trust ? trustGlyphs(trust, now) : '', size ? sizeInline(size) : '']
+        .filter(Boolean)
+        .join(' ')
+      const detail = [trust ? trustDetail(trust, now) : '', size ? sizeDetail(size) : '']
+        .filter(Boolean)
+        .join(ansis.dim(' · '))
+      return { glyphs, detail }
+    },
+    // Lazily fetch bundle size for the focused row only (Bundlephobia is slow /
+    // rate-limited). Guarded so it fires at most once per package; the result
+    // merges in and triggers a re-render, filling the focused-row detail.
+    onFocus: (name) => {
+      if (bundleRequested.has(name)) return
+      bundleRequested.add(name)
+      void fetchBundleSize(name).then((bundle) => {
+        if (!bundle) return
+        sizeByName.set(name, { ...sizeByName.get(name), bundle })
+        process.stdin.emit('keypress', '', { name: '' })
+      })
     },
     onToggle: (name) => depTypes.set(name, !depTypes.get(name)),
     onOpen(name) {
@@ -177,6 +211,15 @@ async function openSearchBox(seedQuery: string | undefined, mode: SearchMode): P
             }
             void fetchTrustSignals(names).then(mergeSignals)
             void fetchDownloadTrend(names).then(mergeSignals)
+
+            // Install size: eager for every row, one packument request each
+            // (bounded concurrency), merged into its own map, same degrade rules.
+            void fetchInstallSizes(names).then((sizes) => {
+              if (lastSearchTerm !== input) return
+              for (const [name, installSize] of sizes)
+                sizeByName.set(name, { ...sizeByName.get(name), installSize })
+              process.stdin.emit('keypress', '', { name: '' })
+            })
           } catch {
             // Search failed silently — direct option still works.
           } finally {

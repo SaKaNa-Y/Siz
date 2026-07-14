@@ -1,8 +1,9 @@
 import ansis from 'ansis'
 
-import type { FavoritePackage, SearchResult, TrustSignals } from '../core/types.ts'
+import type { FavoritePackage, SearchResult, SizeSignals, TrustSignals } from '../core/types.ts'
 
 import { suggestCategory } from '../core/categories.ts'
+import { formatBytes, isHeavy } from '../core/size.ts'
 import { formatPublishAge, isStale } from '../core/trust.ts'
 
 /** A small 0..1 score bar like ▰▰▰▱▱. */
@@ -51,9 +52,33 @@ export function trustDetail(signals: TrustSignals, now: number): string {
   return parts.join(ansis.dim(' · '))
 }
 
-/** One-line legend explaining the trust glyphs, shown beneath the search box. */
+/** One-line legend explaining the trust + size glyphs, shown beneath the search box. */
 export function trustLegend(): string {
-  return `${ansis.red('⚠')} ${ansis.dim('deprecated')}   ${ansis.yellow('⚑')} ${ansis.dim('stale (>2y)')}   ${ansis.green('✓')} ${ansis.dim('provenance')}   ${ansis.green('↑')} ${ansis.dim('rising')}   ${ansis.red('↓')} ${ansis.dim('falling')}`
+  return `${ansis.red('⚠')} ${ansis.dim('deprecated')}   ${ansis.yellow('⚑')} ${ansis.dim('stale (>2y)')}   ${ansis.green('✓')} ${ansis.dim('provenance')}   ${ansis.green('↑')} ${ansis.dim('rising')}   ${ansis.red('↓')} ${ansis.dim('falling')}   ${ansis.yellow('■')} ${ansis.dim('heavy (>1MB)')}`
+}
+
+/**
+ * Compact install-size annotation for a result row: the humanized size, plus a
+ * `■` glyph when it crosses the heavy threshold. '' when the size is unknown.
+ * Bundle size never appears here — it is a focused-row detail only.
+ */
+export function sizeInline(size: SizeSignals): string {
+  const text = formatBytes(size.installSize)
+  if (!text) return ''
+  const heavy = isHeavy(size.installSize)
+  return heavy ? `${ansis.yellow(text)} ${ansis.yellow('■')}` : ansis.dim(text)
+}
+
+/** Expanded, word-form size signals for a focused row / `--list` card. */
+export function sizeDetail(size: SizeSignals): string {
+  const parts: string[] = []
+  const install = formatBytes(size.installSize)
+  if (install) {
+    const label = `${install} install`
+    parts.push(isHeavy(size.installSize) ? ansis.yellow(label) : ansis.dim(label))
+  }
+  if (size.bundle) parts.push(ansis.dim(`${formatBytes(size.bundle.gzip)} gz`))
+  return parts.join(ansis.dim(' · '))
 }
 
 /** Render one search result as a multi-line card. */
@@ -63,6 +88,7 @@ export function renderSearchResult(
     favorite?: boolean
     showDescription?: boolean
     signals?: TrustSignals
+    size?: SizeSignals
     now?: number
   } = {},
 ): string {
@@ -84,9 +110,11 @@ export function renderSearchResult(
           .join(', ')}`
       : ''
   const quality = `  ${ansis.dim('quality')} ${scoreBar(r.score.quality)}  ${ansis.dim('popularity')} ${scoreBar(r.score.popularity)}`
-  const signalsLine = state.signals
-    ? `  ${trustDetail(state.signals, state.now ?? Date.now())}`.trimEnd()
-    : ''
+  const details = [
+    state.signals ? trustDetail(state.signals, state.now ?? Date.now()) : '',
+    state.size ? sizeDetail(state.size) : '',
+  ].filter(Boolean)
+  const signalsLine = details.length ? `  ${details.join(ansis.dim(' · '))}` : ''
 
   return [header, desc, keywords, quality, signalsLine].filter(Boolean).join('\n')
 }

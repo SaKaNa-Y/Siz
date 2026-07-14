@@ -3,6 +3,7 @@ import ansis from 'ansis'
 import type { TrustSignals } from '../core/types.ts'
 
 import { type SearchMode, searchPackages } from '../core/registry.ts'
+import { fetchInstallSizes } from '../core/size.ts'
 import { listFavorites } from '../core/store.ts'
 import { fetchDownloadTrend, fetchTrustSignals } from '../core/trust.ts'
 import { renderSearchResult } from '../ui/render.ts'
@@ -18,9 +19,14 @@ export async function runSearchPrint(query: string, opts: SearchPrintOptions = {
   const mode = opts.mode ?? 'name'
   const results = await searchPackages(query, { size: opts.size, mode })
   const names = results.map((r) => r.name)
-  // Two independent sources (metadata + download API), fetched in parallel and
-  // merged per package into one TrustSignals.
-  const [trust, trend] = await Promise.all([fetchTrustSignals(names), fetchDownloadTrend(names)])
+  // Independent sources (metadata + download API + packument install size),
+  // fetched in parallel. Bundle size is interactive-focus-only — never fetched
+  // here, so --list/--json stay fast and off Bundlephobia's rate limit.
+  const [trust, trend, installSizes] = await Promise.all([
+    fetchTrustSignals(names),
+    fetchDownloadTrend(names),
+    fetchInstallSizes(names),
+  ])
   const signals = new Map<string, TrustSignals>()
   for (const name of names) {
     const merged = { ...trust.get(name), ...trend.get(name) }
@@ -28,10 +34,11 @@ export async function runSearchPrint(query: string, opts: SearchPrintOptions = {
   }
 
   if (opts.json) {
-    // Merge trust signals additively onto each result for scripting.
+    // Merge trust signals + install size additively onto each result for scripting.
     const enriched = results.map((r) => ({
       ...r,
       ...signals.get(r.name),
+      ...(installSizes.has(r.name) ? { installSize: installSizes.get(r.name) } : {}),
     }))
     console.log(JSON.stringify(enriched, null, 2))
     return
@@ -51,6 +58,7 @@ export async function runSearchPrint(query: string, opts: SearchPrintOptions = {
         favorite: favoriteNames.has(r.name),
         showDescription,
         signals: signals.get(r.name),
+        size: installSizes.has(r.name) ? { installSize: installSizes.get(r.name) } : undefined,
       }),
     )
     console.log('')

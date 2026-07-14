@@ -6,8 +6,11 @@
 
 ### Discover
 
+**Result signal**:
+The umbrella term for any fact siz attaches inline to a search result to help the user judge it *before* installing — the parent of [[#trust-signal|trust signals]] (health), [[#size-signal|size signals]] (weight), and the planned *license signal* (legal). All result signals share the same contract: purely informational (never block, filter, or reorder), fetched outside the search endpoint, and degrade silently when unavailable. What distinguishes the families is the *kind* of fact, not the mechanism.
+
 **Trust signal**:
-A health/maintenance fact about a package, surfaced inline on a search result so the user can judge it before installing. The v1 set is deprecation status, publish age, and provenance — all read from a single batch metadata call.
+A **health/maintenance** fact about a package (one family of [[#result-signal|result signal]]), surfaced inline on a search result so the user can judge it before installing. The v1 set is deprecation status, publish age, provenance, and [[#momentum|momentum]]. Distinct from a [[#size-signal|size signal]], which is about *weight*, not health.
 _Avoid_: health badge, quality indicator (those overlap with npm's existing `score.*` bars)
 
 **Trust-aware discovery**:
@@ -32,6 +35,18 @@ _Avoid_: "alternative", "recommendation" (those are the editorial, curated featu
 **Momentum** (download trend):
 The direction of a package's recent download volume — **rising** (`↑`, green) or **falling** (`↓`, red) — derived from npm's download API, a separate source from the metadata behind the other [[#trust-signal|trust signals]]. It is a [[#trust-signal|trust signal]], not a [[#score|score]]: `score.popularity` is npm's static popularity number, momentum is *change over time*. **Approximate by design** (a two-call proxy, see ADR 0002) and **two-sided** (unlike positive-only [[#provenance|provenance]], both directions show). Suppressed below a download-volume floor (too noisy) and **unavailable for scoped packages** (`@scope/pkg`), which the bulk download endpoint rejects — those simply show no momentum glyph. Flat/unknown renders nothing.
 _Avoid_: "popularity" (that is the existing [[#score|score]]), "downloads" (we show direction, not a count).
+
+**Size signal**:
+A **weight/cost** fact about a package (one family of [[#result-signal|result signal]]), surfaced inline so the user can weigh how heavy a package is before installing. Two members: [[#install-size|install size]] and [[#bundle-size|bundle size]]. A size signal is about how much a package *costs to add*, never about its health (that is a [[#trust-signal|trust signal]]) or its npm [[#score|score]]. Like every result signal it is informational — it never blocks, filters, or reranks. See ADR 0008.
+_Avoid_: "trust signal" (that is health), "weight" alone (ambiguous — say install vs bundle).
+
+**Install size**:
+A package's **own unpacked-on-disk size** — the `dist.unpackedSize` of its latest version, read per-package from the npm packument (`registry.npmjs.org/<pkg>`). It is *this package only*, excluding its dependencies, and it is what lands in `node_modules` for the package itself. Shown inline on every result (interactive rows, `--list`, and the `--json` `installSize` field). A package past an editorial **heavy** byte threshold also renders a `heavy` glyph — the same "heavy" notion the planned *lighter-alternative suggestion* feature reuses.
+_Avoid_: "bundle size" (that is the browser-ship figure including deps), "download size" (that is the compressed tarball, a different number).
+
+**Bundle size**:
+A package's **minified + gzipped browser-ship weight, including its transitive dependencies** — the figure reported by [Bundlephobia](https://bundlephobia.com). Distinct from [[#install-size|install size]] on two axes: it counts dependencies, and it measures the *shipped* (min+gzip) bytes, not the on-disk unpacked bytes. Because it is slow to compute and rate-limited upstream, it is fetched **lazily, only for the focused row** in interactive search, and is **never** part of `--list`/`--json` output (which stays fast and CI-safe). See ADR 0008.
+_Avoid_: "install size" (that excludes deps and measures on-disk unpacked bytes).
 
 ### Manage
 
