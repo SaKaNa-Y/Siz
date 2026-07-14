@@ -46,6 +46,13 @@ export interface SearchPromptOptions<T = string> {
    * focused row. Either may be empty.
    */
   signals?: (value: T) => { glyphs?: string; detail?: string } | undefined
+  /**
+   * Called (at render time) with the currently focused option's value. Lets the
+   * caller lazily fetch focus-only data (e.g. bundle size); it fires on every
+   * render for the focused row, so the callback must be cheap/idempotent
+   * (memoized) and trigger its own re-render when async data lands.
+   */
+  onFocus?: (value: T) => void
   /** Called when the user presses Ctrl+T on a focused option; followed by a re-render. */
   onToggle?: (value: T) => void
 }
@@ -138,6 +145,10 @@ export async function searchPrompt<T = string>(
               : styleText('dim', S_CHECKBOX_INACTIVE)
 
             const badge = opts.badge?.(option.value) ?? ''
+
+            // Notify the caller which row is focused so it can lazily fetch
+            // focus-only data (e.g. bundle size). Cheap/idempotent by contract.
+            if (option.value === this.focusedValue) opts.onFocus?.(option.value)
 
             const trust = opts.signals?.(option.value)
             const glyphs = trust?.glyphs ? ` ${trust.glyphs}` : ''

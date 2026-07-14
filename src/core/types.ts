@@ -119,3 +119,24 @@ export interface TrustSignals {
    */
   momentum?: 'rising' | 'falling'
 }
+
+/**
+ * Weight/cost facts about a package, fetched separately from the search endpoint
+ * and surfaced inline on a result — a *size signal*, distinct from the health
+ * oriented {@link TrustSignals}. Purely informational; all fields optional (an
+ * empty object means "no sizes to show"). See ADR 0008.
+ */
+export interface SizeSignals {
+  /**
+   * The package's own unpacked-on-disk size in bytes (npm `dist.unpackedSize`
+   * of the latest version). Excludes dependencies. Fetched eagerly for every
+   * result and shown on every row.
+   */
+  installSize?: number
+  /**
+   * Minified + gzipped browser-ship size in bytes, including transitive deps,
+   * from Bundlephobia. Fetched lazily (focused row only) and never in
+   * `--list`/`--json`, so it is absent unless a row was focused interactively.
+   */
+  bundle?: { gzip: number; minified: number }
+}

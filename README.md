@@ -2,6 +2,9 @@
 
 > **Si**mpler package **z**earch — a smarter npm package search and management CLI.
 
+> [!IMPORTANT] 
+> Refactoring may be performed from time to time.
+
 Siz is a command-line tool for discovering, installing, and organizing npm packages. Open a live search box, multi-select what you need, then install it with your package manager of choice — or favorite packages for later. Everything you organize is stored locally and stays safe across upgrades.
 
 Inspired by [`@rizumu/nai`](https://github.com/LittleSound/nai): Siz keeps nai's interactive search-and-install flow, and adds a discovery and organization layer (favorites and categories) around it. It also borrows ideas from antfu's [`ni`](https://github.com/antfu-collective/ni) (package-manager detection and a unified install experience) and [`taze`](https://github.com/antfu-collective/taze) (ceiling-based dependency upgrades).
@@ -20,7 +23,7 @@ Siz is a unified package-management workflow layer: an interactive interface ove
 - [x] Trust-aware discovery: deprecation, publish age, and provenance shown inline on each result, before install
 - [x] Download-trend signal — `↑`/`↓` download-count momentum inline on each result (scoped packages excepted)
 - [x] Replacement suggestions for deprecated packages — `→ replaced by …`, parsed from the deprecation message (the successor the maintainer named)
-- [ ] **Later** — Package-size signal — install / bundle size shown inline on each result, before install
+- [x] Package-size signal — install size shown inline on every result (and bundle size on the focused row), before install
 - [ ] **Later** — License signal — the package's license shown inline (a legal/compatibility fact, distinct from the health-oriented trust signals)
 - [ ] **Later** — Ships-types signal — flag whether a package bundles its own TypeScript types or needs a separate `@types/*`
 - [ ] **Later** — Lighter-alternative suggestions for heavy packages — a curated map of leaner swaps (e.g. `moment` → `dayjs`), leaning on the package-size signal
@@ -166,6 +169,15 @@ To help you judge a package _before_ installing, Siz annotates each result with 
 | `✓`   | **Provenance** — the package has npm provenance or a trusted publisher |
 
 The glyphs show on every row so you can compare at a glance; the focused row expands them to words (e.g. `deprecated: no longer maintained · published 4y ago`). When a deprecation message names a successor, that focused detail (and `--list`/`--json`) also surfaces it as `→ replaced by <pkg>` — parsed straight from the message, so it reflects what the maintainer pointed to, not a recommendation siz invents (a deprecated package whose message names no successor simply shows none). `--json` adds a `replacedBy` array per result. Signals are purely informational — they never block, filter, or reorder results. They load progressively (the list never waits on them) and degrade silently if the metadata service (`fast-npm-meta`, see [Data sources & network](#data-sources--network)) is unreachable. The `--list` and `--json` outputs include them too (`--json` adds `deprecated`, `publishedAt`, and `provenance` fields per result).
+
+### Size signals
+
+To help you weigh how *heavy* a package is before adding it, Siz also shows its size inline — a **size signal**, distinct from the health-oriented trust signals above (it's about weight, not maintenance). Two numbers, from two sources:
+
+- **Install size** — the package's own unpacked-on-disk size (npm's `dist.unpackedSize`, excluding dependencies). Shown on **every** result row. A package past a "heavy" threshold (~1 MB) also gets a `■` glyph, so bulky packages stand out at a glance.
+- **Bundle size** — the minified + gzipped browser-ship weight, **including** transitive dependencies, from [Bundlephobia](https://bundlephobia.com). Because it's slower and rate-limited, it's fetched **only for the focused row** and shown in that row's expanded detail (e.g. `1.4 MB install · 72 kB gz`).
+
+Like trust signals, sizes load progressively, never block the list, and degrade silently if a source is unreachable. The `--list` and `--json` outputs include the install size (`--json` adds an `installSize` field, in bytes, per result); bundle size is interactive-only, so scripting and CI stay fast and off Bundlephobia's rate limit. See [ADR 0008](./docs/adr/0008-package-size-data-sources.md).
 
 ### Non-interactive output
 
@@ -361,8 +373,10 @@ Siz talks to a few different services depending on what you're doing:
 | Outdated report (`siz outdated`) | `npm.antfu.dev` (via `fast-npm-meta`) | Third-party hosted aggregator |
 | Bundle latest-version resolution (`bundle install`) | `npm.antfu.dev` (via `fast-npm-meta`) | Third-party hosted aggregator |
 | Download-trend momentum (`↑`/`↓`) | `api.npmjs.org/downloads` | Official npm download-counts API |
+| Install size (size signal, every result) | `registry.npmjs.org/<pkg>` (packument) | Official npm registry |
+| Bundle size (size signal, focused row only) | `bundlephobia.com/api/size` | Third-party hosted service |
 
-Trust signals, upgrades, and bundle resolution go through **`fast-npm-meta`**, whose default API endpoint is **`https://npm.antfu.dev/`** — a third-party service (maintained by [antfu](https://github.com/antfu)) that mirrors and aggregates the npm registry so this data can be fetched in a single batched request. These calls **degrade silently** if the service is unreachable (trust glyphs simply don't appear; upgrades/bundles surface the failure). Note that `fast-npm-meta` cannot be pointed at the raw `registry.npmjs.org` — it speaks its own aggregation protocol — so removing this dependency would require self-hosting that API or reimplementing the fetches. Package search and download-trend momentum use **official npm endpoints** directly. See [ADR 0003](./docs/adr/0003-fast-npm-meta-hosted-endpoint.md) for the rationale.
+Trust signals, upgrades, and bundle resolution go through **`fast-npm-meta`**, whose default API endpoint is **`https://npm.antfu.dev/`** — a third-party service (maintained by [antfu](https://github.com/antfu)) that mirrors and aggregates the npm registry so this data can be fetched in a single batched request. These calls **degrade silently** if the service is unreachable (trust glyphs simply don't appear; upgrades/bundles surface the failure). Note that `fast-npm-meta` cannot be pointed at the raw `registry.npmjs.org` — it speaks its own aggregation protocol — so removing this dependency would require self-hosting that API or reimplementing the fetches. Package search, download-trend momentum, and **install size** (the packument's `dist.unpackedSize`) use **official npm endpoints** directly. **Bundle size** is the one signal from another third party, [Bundlephobia](https://bundlephobia.com) — fetched only for the focused search row and degrading silently like the rest. See [ADR 0003](./docs/adr/0003-fast-npm-meta-hosted-endpoint.md) and [ADR 0008](./docs/adr/0008-package-size-data-sources.md) for the rationale.
 
 ## License
 
