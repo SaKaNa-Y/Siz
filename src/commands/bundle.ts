@@ -9,6 +9,7 @@ import {
   detectPM,
   formatCommand,
   runInstall,
+  saveFlag,
   type SpecSelection,
 } from '../core/pm.ts'
 import { getBundle, listBundles, removeBundle, renameBundle, touchBundle } from '../core/store.ts'
@@ -157,17 +158,24 @@ export async function runBundleInstall(
   if (!filtered) return
   chosen = filtered
 
-  const hasPeerOrOptional = chosen.some(
-    (i) => i.depType === 'peerDependencies' || i.depType === 'optionalDependencies',
-  )
-
   const agent = await pickPackageManager(bundle.packageManager ?? (await detectPM(cwd)))
   const selections: SpecSelection[] = chosen.map((i) => ({ spec: i.spec, depType: i.depType }))
   const cmds = buildBundleInstallCommands(agent, selections)
 
+  // Warn only when the chosen manager genuinely can't express a selected
+  // peer/optional type (e.g. deno), so those deps degrade to regular ones.
+  const degraded = chosen.filter(
+    (i) =>
+      (i.depType === 'peerDependencies' || i.depType === 'optionalDependencies') &&
+      !saveFlag(agent, i.depType),
+  )
   const note = [
     cmds.map((c) => ansis.cyan(formatCommand(c))).join('\n'),
-    hasPeerOrOptional ? ansis.dim('peer/optional deps install as regular dependencies') : '',
+    degraded.length
+      ? ansis.dim(
+          `${agent} can't express peer/optional deps — installing as regular: ${degraded.map((i) => i.name).join(', ')}`,
+        )
+      : '',
   ]
     .filter(Boolean)
     .join('\n')

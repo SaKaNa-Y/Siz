@@ -95,9 +95,7 @@ export async function fetchInstallSizes(names: string[]): Promise<Map<string, nu
       installCache.set(name, await fetchOneInstallSize(name))
     }
   }
-  await Promise.all(
-    Array.from({ length: Math.min(INSTALL_CONCURRENCY, missing.length) }, worker),
-  )
+  await Promise.all(Array.from({ length: Math.min(INSTALL_CONCURRENCY, missing.length) }, worker))
 
   const out = new Map<string, number>()
   for (const name of names) {

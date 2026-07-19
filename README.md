@@ -35,7 +35,7 @@ Siz is a unified package-management workflow layer: an interactive interface ove
 - [x] Favorites — a lightweight curated shortlist of packages you reach for, and the empty-box front door
 - [x] Heuristic auto-categorization when you favorite a package
 - [x] Bundles — named recipes that record versions, dep types, and preferred PM, installable together in one step
-- [ ] **Later** — Peer/optional bundle install — install a bundle's peer/optional deps as their true type (today the types are recorded but installed as regular dependencies)
+- [x] Peer/optional bundle install — a bundle's peer/optional deps install as their true type via the manager's save flag (npm / pnpm / yarn / bun; deno falls back to a regular dependency)
 - [ ] **Later** — Export / import favorites & bundles — shareable JSON, the concrete basis for team-shared presets
 - [ ] **Later** — Local search and install history
 - [ ] **Maybe** — Seed a bundle from the current project — snapshot the current `package.json` deps into a named bundle
@@ -303,7 +303,7 @@ siz bundle rename my-stack web  # rename
 siz bundle rm my-stack          # delete (after confirmation)
 ```
 
-`siz bundle install` resolves each package's **latest** version fresh from npm (never snapshotted), applies its recorded version strategy (caret `^` / tilde `~` / exact / `latest`), lets you multi-select which to install, and prompts for a package manager. Mixed dependency types install as separate commands; peer and optional dependencies install as regular dependencies. Bundles are saved in the local data store and migrate non-destructively (schema v2).
+`siz bundle install` resolves each package's **latest** version fresh from npm (never snapshotted), applies its recorded version strategy (caret `^` / tilde `~` / exact / `latest`), lets you multi-select which to install, and prompts for a package manager. Each dependency type installs as its own command with the manager's save flag — regular, dev (`-D`), peer (`--save-peer` / `--peer`), and optional (`--save-optional` / `--optional`) — so packages land in the right `package.json` bucket. Deno, which has no peer/optional concept, installs those as regular dependencies (with a notice). Bundles are saved in the local data store and migrate non-destructively (schema v2).
 
 ## Commands
 

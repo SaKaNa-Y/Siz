@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import type { Bundle, BundlePackage } from '../src/core/types.ts'
 import type { VersionInfo } from '../src/core/compare.ts'
+import type { Bundle, BundlePackage } from '../src/core/types.ts'
 
 /** Build a Bundle from a map of name → {strategy, depType}. */
 function makeBundle(entries: Record<string, Omit<BundlePackage, 'name'>>): Bundle {

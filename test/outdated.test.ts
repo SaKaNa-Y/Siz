@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
 import type { CatalogManifest } from '../src/core/catalog.ts'
-import type { ProjectDep } from '../src/core/project.ts'
 import type { VersionInfo } from '../src/core/compare.ts'
+import type { ProjectDep } from '../src/core/project.ts'
 
 import { analyzeOutdated, buildOutdatedReport, planCatalogOutdated } from '../src/core/outdated.ts'
 
