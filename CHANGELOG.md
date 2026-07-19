@@ -1,5 +1,17 @@
 # @sakana-y/siz
 
+## 0.4.0
+
+### Minor Changes
+
+- [#38](https://github.com/SaKaNa-Y/Siz/pull/38) [`c621d67`](https://github.com/SaKaNa-Y/Siz/commit/c621d6730acf1b5a335e75e331ab77db35a6cb5c) Thanks [@SaKaNa-Y](https://github.com/SaKaNa-Y)! - Install **peer and optional dependencies** into their correct bucket when installing a bundle. `siz add --bundle` / `siz bundle install` now emit the package manager's own save flag per dependency type — `--save-peer` / `--save-optional` for npm & pnpm, `--peer` / `--optional` for yarn & bun — instead of silently installing peer/optional deps as regular dependencies. Managers with no peer/optional concept (deno) degrade to a regular dependency and now say exactly which packages were affected.
+
+### Patch Changes
+
+- [#37](https://github.com/SaKaNa-Y/Siz/pull/37) [`04829f2`](https://github.com/SaKaNa-Y/Siz/commit/04829f20d0a60dc0c2d01053894818d69837deef) Thanks [@SaKaNa-Y](https://github.com/SaKaNa-Y)! - Add a **package-size signal** to search results. Each result now shows its **install size** (the package's own unpacked-on-disk size) inline on every row — with a `■` glyph flagging packages past a "heavy" threshold — and, on the focused row in interactive search, its **bundle size** (minified + gzipped, including dependencies, from Bundlephobia). Install size is included in `--list` output and as an `installSize` field in `--json`; bundle size is interactive-only, so scripting/CI stays fast. Sizes load progressively and degrade silently if a source is unreachable.
+
+- [#35](https://github.com/SaKaNa-Y/Siz/pull/35) [`f89d158`](https://github.com/SaKaNa-Y/Siz/commit/f89d158f3ec04685df35427b2fe3aa1b2872eff2) Thanks [@SaKaNa-Y](https://github.com/SaKaNa-Y)! - Extract a shared registry-comparison core (`core/compare.ts`) that `siz upgrade` and `siz outdated` both specialize over, so the two commands agree on a project's dependency state by construction. Behavior and the public library API are unchanged.
+
 ## 0.3.2
 
 ### Patch Changes
