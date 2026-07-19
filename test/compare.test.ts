@@ -5,7 +5,11 @@ import type { DepType, ProjectDep } from '../src/core/project.ts'
 
 import { compareDep } from '../src/core/compare.ts'
 
-function info(name: string, versions: string[], latest = versions[versions.length - 1]): VersionInfo {
+function info(
+  name: string,
+  versions: string[],
+  latest = versions[versions.length - 1],
+): VersionInfo {
   return { name, versions, latest, exists: true }
 }
 
@@ -25,7 +29,12 @@ describe('compareDep', () => {
       reason: 'not-found',
     })
     expect(
-      compareDep(dep('ghost', '^1.0.0'), { name: 'ghost', versions: [], latest: null, exists: false }),
+      compareDep(dep('ghost', '^1.0.0'), {
+        name: 'ghost',
+        versions: [],
+        latest: null,
+        exists: false,
+      }),
     ).toEqual({ kind: 'skipped', reason: 'not-found' })
   })
 
@@ -55,7 +64,12 @@ describe('compareDep', () => {
   })
 
   it('latestDiff is null when there is no valid latest', () => {
-    const r = compareDep(dep('foo', '^1.0.0'), { name: 'foo', versions: ['1.0.0'], latest: null, exists: true })
+    const r = compareDep(dep('foo', '^1.0.0'), {
+      name: 'foo',
+      versions: ['1.0.0'],
+      latest: null,
+      exists: true,
+    })
     expect(r.kind).toBe('comparison')
     if (r.kind !== 'comparison') return
     expect(r.facts.latestDiff).toBeNull()
@@ -69,7 +83,10 @@ describe('compareDep', () => {
   })
 
   it('keeps prereleases in candidates when current is itself a prerelease', () => {
-    const r = compareDep(dep('foo', '1.0.0-rc.1'), info('foo', ['1.0.0-rc.1', '1.0.0-rc.2', '1.0.0']))
+    const r = compareDep(
+      dep('foo', '1.0.0-rc.1'),
+      info('foo', ['1.0.0-rc.1', '1.0.0-rc.2', '1.0.0']),
+    )
     expect(r.kind).toBe('comparison')
     if (r.kind !== 'comparison') return
     expect(r.facts.currentIsPre).toBe(true)

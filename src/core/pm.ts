@@ -12,17 +12,51 @@ export interface InstallCommand {
 }
 
 /**
- * Per-agent flag for installing as a devDependency.
- * Most managers accept `-D`; bun uses `-d`; deno has no dev concept.
+ * Per-dep-type, per-agent flag that routes an `add` into the right bucket.
+ * `dependencies` needs no flag (the manager's default), so it is not listed.
+ * Most managers accept `-D` for dev (bun uses `-d`); peer/optional use the
+ * long, explicit forms. An agent absent from a bucket (e.g. deno everywhere,
+ * which has no dev/peer/optional concept) falls back to a regular dependency.
  */
-const DEV_FLAG: Partial<Record<Agent, string>> = {
-  npm: '-D',
-  pnpm: '-D',
-  'pnpm@6': '-D',
-  yarn: '-D',
-  'yarn@berry': '-D',
-  bun: '-d',
-  // deno: intentionally omitted (no dev dependencies)
+const SAVE_FLAG: Record<
+  'devDependencies' | 'peerDependencies' | 'optionalDependencies',
+  Partial<Record<Agent, string>>
+> = {
+  devDependencies: {
+    npm: '-D',
+    pnpm: '-D',
+    'pnpm@6': '-D',
+    yarn: '-D',
+    'yarn@berry': '-D',
+    bun: '-d',
+  },
+  peerDependencies: {
+    npm: '--save-peer',
+    pnpm: '--save-peer',
+    'pnpm@6': '--save-peer',
+    yarn: '--peer',
+    'yarn@berry': '--peer',
+    bun: '--peer',
+  },
+  optionalDependencies: {
+    npm: '--save-optional',
+    pnpm: '--save-optional',
+    'pnpm@6': '--save-optional',
+    yarn: '--optional',
+    'yarn@berry': '--optional',
+    bun: '--optional',
+  },
+}
+
+/**
+ * The `add` flag that routes a package into the given dependency bucket for an
+ * agent, or `undefined` when none is needed/available: `dependencies` (the
+ * manager default) and any bucket an agent can't express (e.g. deno) both map
+ * to `undefined`, meaning "install as a regular dependency".
+ */
+export function saveFlag(agent: Agent, depType: BundleDepType): string | undefined {
+  if (depType === 'dependencies') return undefined
+  return SAVE_FLAG[depType][agent]
 }
 
 /**
@@ -35,6 +69,18 @@ export async function detectPM(cwd: string = process.cwd()): Promise<Agent> {
 }
 
 /**
+ * Build an `add` command for an agent, optionally prefixing a bucket flag
+ * (e.g. `-D`, `--save-peer`). Pure — no side effects. Falls back to npm
+ * semantics if the agent is somehow unknown.
+ */
+function buildAddCommand(agent: Agent, names: string[], flag?: string): InstallCommand {
+  const args = [...(flag ? [flag] : []), ...names]
+  const resolved = resolveCommand(agent, 'add', args)
+  if (!resolved) return { command: 'npm', args: ['install', ...args] }
+  return { command: resolved.command, args: resolved.args }
+}
+
+/**
  * Build the install command for an agent (pure — no side effects).
  * `dev` adds the manager-specific devDependency flag.
  */
@@ -43,14 +89,7 @@ export function buildInstallCommand(
   names: string[],
   opts: { dev?: boolean } = {},
 ): InstallCommand {
-  const devFlag = opts.dev ? DEV_FLAG[agent] : undefined
-  const args = [...(devFlag ? [devFlag] : []), ...names]
-  const resolved = resolveCommand(agent, 'add', args)
-  if (!resolved) {
-    // Fallback to npm semantics if the agent is somehow unknown.
-    return { command: 'npm', args: ['install', ...args] }
-  }
-  return { command: resolved.command, args: resolved.args }
+  return buildAddCommand(agent, names, opts.dev ? saveFlag(agent, 'devDependencies') : undefined)
 }
 
 /**
@@ -76,27 +115,39 @@ export interface SpecSelection {
   depType: BundleDepType
 }
 
+/** Dep-type buckets in the order their install commands are emitted. */
+const DEP_TYPE_ORDER: BundleDepType[] = [
+  'dependencies',
+  'devDependencies',
+  'peerDependencies',
+  'optionalDependencies',
+]
+
 /**
  * Build install commands for a bundle: specs already carry their version range
  * (managers accept `pkg@range` for `add`), so they flow through untouched.
- * Splits devDependencies from everything else into up to two commands.
- *
- * NOTE: v1 has no per-manager peer/optional flags, so peer/optional install as
- * regular dependencies. The true dep type is still stored in the bundle for a
- * future `--save-peer`/`--save-optional` pass. Pure — no side effects.
+ * Each dependency bucket is installed with its manager save flag (`-D`,
+ * `--save-peer`, `--save-optional`, …), emitting one command per distinct flag
+ * in a stable order. Buckets a manager can't express (e.g. deno's peer/optional)
+ * resolve to no flag and merge into the flagless regular-dependency command.
+ * Pure — no side effects.
  */
-const isDev = (d: BundleDepType) => d === 'devDependencies'
-
 export function buildBundleInstallCommands(
   agent: Agent,
   selections: SpecSelection[],
 ): InstallCommand[] {
-  const prod = selections.filter((s) => !isDev(s.depType)).map((s) => s.spec)
-  const dev = selections.filter((s) => isDev(s.depType)).map((s) => s.spec)
-  const cmds: InstallCommand[] = []
-  if (prod.length) cmds.push(buildInstallCommand(agent, prod))
-  if (dev.length) cmds.push(buildInstallCommand(agent, dev, { dev: true }))
-  return cmds
+  // Group specs by the flag their dep type resolves to for this agent, keeping
+  // `undefined` (regular deps + any unsupported bucket) as one flagless group.
+  const groups = new Map<string | undefined, string[]>()
+  for (const depType of DEP_TYPE_ORDER) {
+    const specs = selections.filter((s) => s.depType === depType).map((s) => s.spec)
+    if (!specs.length) continue
+    const flag = saveFlag(agent, depType)
+    const existing = groups.get(flag)
+    if (existing) existing.push(...specs)
+    else groups.set(flag, specs)
+  }
+  return [...groups].map(([flag, specs]) => buildAddCommand(agent, specs, flag))
 }
 
 /**

@@ -96,12 +96,62 @@ describe('buildBundleInstallCommands', () => {
     expect(cmds.map(formatCommand)).toEqual(['pnpm add react@^18.2.0', 'pnpm add -D vitest@^2.0.0'])
   })
 
-  it('treats peer/optional deps as regular dependencies in v1', () => {
-    const cmds = buildBundleInstallCommands('npm', [
+  it('installs peer deps with the manager save flag', () => {
+    const peer = { spec: 'react@^18.2.0', depType: 'peerDependencies' as const }
+    expect(formatCommand(buildBundleInstallCommands('npm', [peer])[0])).toBe(
+      'npm i --save-peer react@^18.2.0',
+    )
+    expect(formatCommand(buildBundleInstallCommands('pnpm', [peer])[0])).toBe(
+      'pnpm add --save-peer react@^18.2.0',
+    )
+    expect(formatCommand(buildBundleInstallCommands('yarn', [peer])[0])).toBe(
+      'yarn add --peer react@^18.2.0',
+    )
+    expect(formatCommand(buildBundleInstallCommands('bun', [peer])[0])).toBe(
+      'bun add --peer react@^18.2.0',
+    )
+  })
+
+  it('installs optional deps with the manager save flag', () => {
+    const opt = { spec: 'fsevents@^2.3.0', depType: 'optionalDependencies' as const }
+    expect(formatCommand(buildBundleInstallCommands('npm', [opt])[0])).toBe(
+      'npm i --save-optional fsevents@^2.3.0',
+    )
+    expect(formatCommand(buildBundleInstallCommands('pnpm', [opt])[0])).toBe(
+      'pnpm add --save-optional fsevents@^2.3.0',
+    )
+    expect(formatCommand(buildBundleInstallCommands('yarn', [opt])[0])).toBe(
+      'yarn add --optional fsevents@^2.3.0',
+    )
+    expect(formatCommand(buildBundleInstallCommands('bun', [opt])[0])).toBe(
+      'bun add --optional fsevents@^2.3.0',
+    )
+  })
+
+  it('splits a mixed selection into one command per bucket, in stable order', () => {
+    const cmds = buildBundleInstallCommands('pnpm', [
+      { spec: 'vitest@^2.0.0', depType: 'devDependencies' },
+      { spec: 'fsevents@^2.3.0', depType: 'optionalDependencies' },
+      { spec: 'react@^18.2.0', depType: 'dependencies' },
+      { spec: 'react-dom@^18.2.0', depType: 'peerDependencies' },
+    ])
+    expect(cmds.map(formatCommand)).toEqual([
+      'pnpm add react@^18.2.0',
+      'pnpm add -D vitest@^2.0.0',
+      'pnpm add --save-peer react-dom@^18.2.0',
+      'pnpm add --save-optional fsevents@^2.3.0',
+    ])
+  })
+
+  it('degrades peer/optional to a single flagless command for deno', () => {
+    const cmds = buildBundleInstallCommands('deno', [
+      { spec: '@std/assert@^1.0.0', depType: 'dependencies' },
       { spec: 'react@^18.2.0', depType: 'peerDependencies' },
       { spec: 'fsevents@^2.3.0', depType: 'optionalDependencies' },
     ])
-    expect(cmds.map(formatCommand)).toEqual(['npm i react@^18.2.0 fsevents@^2.3.0'])
+    expect(cmds.map(formatCommand)).toEqual([
+      'deno add @std/assert@^1.0.0 react@^18.2.0 fsevents@^2.3.0',
+    ])
   })
 
   it('returns no commands for an empty selection', () => {
