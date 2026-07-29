@@ -32,7 +32,11 @@ const SEE_LICENSE_IN = /^SEE\s+LICENSE\s+IN\s+/i
 /** One license entry as a trimmed string — a bare id or the `{ type }` object form. */
 function entryToString(entry: unknown): string {
   if (typeof entry === 'string') return entry.trim()
-  if (entry && typeof entry === 'object' && typeof (entry as { type?: unknown }).type === 'string') {
+  if (
+    entry &&
+    typeof entry === 'object' &&
+    typeof (entry as { type?: unknown }).type === 'string'
+  ) {
     return (entry as { type: string }).type.trim()
   }
   return ''

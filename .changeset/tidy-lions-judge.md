@@ -1,5 +1,5 @@
 ---
-"@sakana-y/siz": minor
+"@sakana-y/siz": patch
 ---
 
 Add the **license signal** — each search result now shows its declared license inline, so you can judge legal compatibility before installing, not after.
