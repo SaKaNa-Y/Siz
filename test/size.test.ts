@@ -39,6 +39,9 @@ describe('isHeavy', () => {
 })
 
 describe('fetchInstallSizes', () => {
+  // Install size now derives from the shared packument layer (core/packument.ts),
+  // which both this signal and the license signal read — so these cases exercise
+  // that layer's fetch, cache, and degrade behavior through the size façade.
   // dist.unpackedSize per package name; undefined means "manifest has no size".
   const sizes: Record<string, number | undefined> = {
     'small-pkg': 340_000,

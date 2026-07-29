@@ -140,3 +140,25 @@ export interface SizeSignals {
    */
   bundle?: { gzip: number; minified: number }
 }
+
+/**
+ * The license a package declares — a *legal* fact, and the third result-signal
+ * family alongside the health-oriented {@link TrustSignals} and the weight
+ * oriented {@link SizeSignals}. Purely informational; siz reports the declared
+ * value and passes no judgement on the terms. See ADR 0009.
+ *
+ * Unlike its sibling families this field is **not** optional, because the
+ * difference between two kinds of "nothing" is load-bearing:
+ *
+ * - `{ license: 'MIT' }` — declared, resolvable
+ * - `{ license: null }` — the manifest resolved and declared nothing (an
+ *   *unclear license*, worth flagging)
+ * - **no entry at all** in a `Map<string, LicenseSignals>` — the packument never
+ *   resolved, so siz knows nothing and must show nothing
+ *
+ * Collapse the last two and one slow network call flags every result as having
+ * no license.
+ */
+export interface LicenseSignals {
+  license: string | null
+}

@@ -1,8 +1,15 @@
 import ansis from 'ansis'
 
-import type { FavoritePackage, SearchResult, SizeSignals, TrustSignals } from '../core/types.ts'
+import type {
+  FavoritePackage,
+  LicenseSignals,
+  SearchResult,
+  SizeSignals,
+  TrustSignals,
+} from '../core/types.ts'
 
 import { suggestCategory } from '../core/categories.ts'
+import { formatLicense, isUnclearLicense, truncateLicense } from '../core/license.ts'
 import { formatBytes, isHeavy } from '../core/size.ts'
 import { formatPublishAge, isStale } from '../core/trust.ts'
 
@@ -52,9 +59,13 @@ export function trustDetail(signals: TrustSignals, now: number): string {
   return parts.join(ansis.dim(' · '))
 }
 
-/** One-line legend explaining the trust + size glyphs, shown beneath the search box. */
-export function trustLegend(): string {
-  return `${ansis.red('⚠')} ${ansis.dim('deprecated')}   ${ansis.yellow('⚑')} ${ansis.dim('stale (>2y)')}   ${ansis.green('✓')} ${ansis.dim('provenance')}   ${ansis.green('↑')} ${ansis.dim('rising')}   ${ansis.red('↓')} ${ansis.dim('falling')}   ${ansis.yellow('■')} ${ansis.dim('heavy (>1MB)')}`
+/**
+ * One-line legend for every result-signal glyph — trust, size, and license —
+ * shown beneath the search box. Named for the umbrella *result signal*, not for
+ * any one family, since it covers all three.
+ */
+export function signalLegend(): string {
+  return `${ansis.red('⚠')} ${ansis.dim('deprecated')}   ${ansis.yellow('⚑')} ${ansis.dim('stale (>2y)')}   ${ansis.green('✓')} ${ansis.dim('provenance')}   ${ansis.green('↑')} ${ansis.dim('rising')}   ${ansis.red('↓')} ${ansis.dim('falling')}   ${ansis.yellow('■')} ${ansis.dim('heavy (>1MB)')}   ${ansis.yellow('⚖')} ${ansis.dim('unclear license')}`
 }
 
 /**
@@ -81,6 +92,25 @@ export function sizeDetail(size: SizeSignals): string {
   return parts.join(ansis.dim(' · '))
 }
 
+/**
+ * Compact license annotation for a result row: the declared license, clipped to
+ * {@link LICENSE_INLINE_MAX}, plus a `⚖` glyph when it can't be resolved from
+ * metadata. The glyph travels with its text (as `■` does in {@link sizeInline})
+ * so each signal family owns one self-contained formatter.
+ */
+export function licenseInline(license: LicenseSignals): string {
+  const text = truncateLicense(formatLicense(license.license))
+  return isUnclearLicense(license.license)
+    ? `${ansis.yellow(text)} ${ansis.yellow('⚖')}`
+    : ansis.dim(text)
+}
+
+/** Expanded, untruncated license for a focused row / `--list` card. */
+export function licenseDetail(license: LicenseSignals): string {
+  const text = formatLicense(license.license)
+  return isUnclearLicense(license.license) ? ansis.yellow(`${text} ⚖`) : ansis.dim(text)
+}
+
 /** Render one search result as a multi-line card. */
 export function renderSearchResult(
   r: SearchResult,
@@ -89,6 +119,7 @@ export function renderSearchResult(
     showDescription?: boolean
     signals?: TrustSignals
     size?: SizeSignals
+    license?: LicenseSignals
     now?: number
   } = {},
 ): string {
@@ -113,6 +144,7 @@ export function renderSearchResult(
   const details = [
     state.signals ? trustDetail(state.signals, state.now ?? Date.now()) : '',
     state.size ? sizeDetail(state.size) : '',
+    state.license ? licenseDetail(state.license) : '',
   ].filter(Boolean)
   const signalsLine = details.length ? `  ${details.join(ansis.dim(' · '))}` : ''
 

@@ -2,6 +2,7 @@ import ansis from 'ansis'
 
 import type { TrustSignals } from '../core/types.ts'
 
+import { fetchLicenses } from '../core/license.ts'
 import { type SearchMode, searchPackages } from '../core/registry.ts'
 import { fetchInstallSizes } from '../core/size.ts'
 import { listFavorites } from '../core/store.ts'
@@ -19,13 +20,16 @@ export async function runSearchPrint(query: string, opts: SearchPrintOptions = {
   const mode = opts.mode ?? 'name'
   const results = await searchPackages(query, { size: opts.size, mode })
   const names = results.map((r) => r.name)
-  // Independent sources (metadata + download API + packument install size),
-  // fetched in parallel. Bundle size is interactive-focus-only — never fetched
-  // here, so --list/--json stay fast and off Bundlephobia's rate limit.
-  const [trust, trend, installSizes] = await Promise.all([
+  // Independent sources (metadata + download API + packument), fetched in
+  // parallel. Install size and license both derive from the packument, so they
+  // share one memoized request per package. Bundle size is interactive-focus-only
+  // — never fetched here, so --list/--json stay fast and off Bundlephobia's
+  // rate limit.
+  const [trust, trend, installSizes, licenses] = await Promise.all([
     fetchTrustSignals(names),
     fetchDownloadTrend(names),
     fetchInstallSizes(names),
+    fetchLicenses(names),
   ])
   const signals = new Map<string, TrustSignals>()
   for (const name of names) {
@@ -34,11 +38,16 @@ export async function runSearchPrint(query: string, opts: SearchPrintOptions = {
   }
 
   if (opts.json) {
-    // Merge trust signals + install size additively onto each result for scripting.
+    // Merge trust signals + install size + license additively onto each result for
+    // scripting. The license key is deliberately three-valued: a string when
+    // declared, an explicit `null` when the manifest declared none, and absent
+    // entirely when the packument never resolved — so a consumer can tell "no
+    // license" from "siz could not check".
     const enriched = results.map((r) => ({
       ...r,
       ...signals.get(r.name),
       ...(installSizes.has(r.name) ? { installSize: installSizes.get(r.name) } : {}),
+      ...licenses.get(r.name),
     }))
     console.log(JSON.stringify(enriched, null, 2))
     return
@@ -59,6 +68,7 @@ export async function runSearchPrint(query: string, opts: SearchPrintOptions = {
         showDescription,
         signals: signals.get(r.name),
         size: installSizes.has(r.name) ? { installSize: installSizes.get(r.name) } : undefined,
+        license: licenses.get(r.name),
       }),
     )
     console.log('')

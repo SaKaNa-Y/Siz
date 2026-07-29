@@ -6,12 +6,14 @@ import type {
   BundleDepType,
   BundlePackage,
   FavoritePackage,
+  LicenseSignals,
   SearchResult,
   SizeSignals,
   TrustSignals,
 } from '../core/types.ts'
 
 import { normalizeCategory, suggestCategory } from '../core/categories.ts'
+import { fetchLicenses } from '../core/license.ts'
 import { parseQuery } from '../core/query.ts'
 import { type SearchMode, searchPackages } from '../core/registry.ts'
 import { fetchBundleSize, fetchInstallSizes } from '../core/size.ts'
@@ -21,11 +23,13 @@ import { highlightKeywords } from '../ui/highlight.ts'
 import { clack, ensure, pickOrCreateBundle, pickSetAction } from '../ui/prompts.ts'
 import {
   categoryLabel,
+  licenseDetail,
+  licenseInline,
+  signalLegend,
   sizeDetail,
   sizeInline,
   trustDetail,
   trustGlyphs,
-  trustLegend,
 } from '../ui/render.ts'
 import { searchPrompt, type SearchOption } from '../ui/search-prompt.ts'
 import { runInstallSelections } from './install-runner.ts'
@@ -103,6 +107,10 @@ async function openSearchBox(seedQuery: string | undefined, mode: SearchMode): P
   // Size signals: install size arrives eagerly (background, all rows); bundle
   // size arrives lazily per focused row (see onFocus). Both read live at render.
   const sizeByName = new Map<string, SizeSignals>()
+  // License signals ride the same packument fetch as install size. A name is
+  // present only once its manifest resolved — absence means "unknown", which must
+  // render nothing rather than an unclear-license flag.
+  const licenseByName = new Map<string, LicenseSignals>()
   // Names we've already kicked a (focus-only) bundle-size fetch for — guards the
   // per-render onFocus from re-requesting or looping.
   const bundleRequested = new Set<string>()
@@ -114,16 +122,25 @@ async function openSearchBox(seedQuery: string | undefined, mode: SearchMode): P
     message: mode === 'description' ? 'Search npm (descriptions)' : 'Search npm packages',
     placeholder,
     initialInput: seedQuery,
-    footer: trustLegend(),
+    footer: signalLegend(),
     badge: (name) => (depTypes.get(name) ? ` ${ansis.cyan('[dev]')}` : ` ${ansis.dim('[dep]')}`),
     signals: (name) => {
       const trust = signalsByName.get(name)
       const size = sizeByName.get(name)
-      if (!trust && !size) return undefined
-      const glyphs = [trust ? trustGlyphs(trust, now) : '', size ? sizeInline(size) : '']
+      const license = licenseByName.get(name)
+      if (!trust && !size && !license) return undefined
+      const glyphs = [
+        trust ? trustGlyphs(trust, now) : '',
+        size ? sizeInline(size) : '',
+        license ? licenseInline(license) : '',
+      ]
         .filter(Boolean)
         .join(' ')
-      const detail = [trust ? trustDetail(trust, now) : '', size ? sizeDetail(size) : '']
+      const detail = [
+        trust ? trustDetail(trust, now) : '',
+        size ? sizeDetail(size) : '',
+        license ? licenseDetail(license) : '',
+      ]
         .filter(Boolean)
         .join(ansis.dim(' · '))
       return { glyphs, detail }
@@ -212,12 +229,18 @@ async function openSearchBox(seedQuery: string | undefined, mode: SearchMode): P
             void fetchTrustSignals(names).then(mergeSignals)
             void fetchDownloadTrend(names).then(mergeSignals)
 
-            // Install size: eager for every row, one packument request each
-            // (bounded concurrency), merged into its own map, same degrade rules.
+            // Install size + license: eager for every row, and both derived from
+            // the same memoized packument, so together they cost one request per
+            // package rather than two. Same stale guard and degrade rules.
             void fetchInstallSizes(names).then((sizes) => {
               if (lastSearchTerm !== input) return
               for (const [name, installSize] of sizes)
                 sizeByName.set(name, { ...sizeByName.get(name), installSize })
+              process.stdin.emit('keypress', '', { name: '' })
+            })
+            void fetchLicenses(names).then((licenses) => {
+              if (lastSearchTerm !== input) return
+              for (const [name, license] of licenses) licenseByName.set(name, license)
               process.stdin.emit('keypress', '', { name: '' })
             })
           } catch {

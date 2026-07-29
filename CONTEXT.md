@@ -7,7 +7,7 @@
 ### Discover
 
 **Result signal**:
-The umbrella term for any fact siz attaches inline to a search result to help the user judge it *before* installing — the parent of [[#trust-signal|trust signals]] (health), [[#size-signal|size signals]] (weight), and the planned *license signal* (legal). All result signals share the same contract: purely informational (never block, filter, or reorder), fetched outside the search endpoint, and degrade silently when unavailable. What distinguishes the families is the *kind* of fact, not the mechanism.
+The umbrella term for any fact siz attaches inline to a search result to help the user judge it *before* installing — the parent of [[#trust-signal|trust signals]] (health), [[#size-signal|size signals]] (weight), and [[#license-signal|license signals]] (legal). All result signals share the same contract: purely informational (never block, filter, or reorder), fetched outside the search endpoint, and degrade silently when unavailable. What distinguishes the families is the *kind* of fact, not the mechanism.
 
 **Trust signal**:
 A **health/maintenance** fact about a package (one family of [[#result-signal|result signal]]), surfaced inline on a search result so the user can judge it before installing. The v1 set is deprecation status, publish age, provenance, and [[#momentum|momentum]]. Distinct from a [[#size-signal|size signal]], which is about *weight*, not health.
@@ -47,6 +47,18 @@ _Avoid_: "bundle size" (that is the browser-ship figure including deps), "downlo
 **Bundle size**:
 A package's **minified + gzipped browser-ship weight, including its transitive dependencies** — the figure reported by [Bundlephobia](https://bundlephobia.com). Distinct from [[#install-size|install size]] on two axes: it counts dependencies, and it measures the *shipped* (min+gzip) bytes, not the on-disk unpacked bytes. Because it is slow to compute and rate-limited upstream, it is fetched **lazily, only for the focused row** in interactive search, and is **never** part of `--list`/`--json` output (which stays fast and CI-safe). See ADR 0008.
 _Avoid_: "install size" (that excludes deps and measures on-disk unpacked bytes).
+
+**License signal**:
+A **legal** fact about a package (one family of [[#result-signal|result signal]]): the license it declares, surfaced inline so the user can judge compatibility before installing. It is about *permission to use*, never about health (a [[#trust-signal|trust signal]]) or cost (a [[#size-signal|size signal]]). Siz reports the declared value **verbatim and passes no judgement on the terms** — whether copyleft is a problem is a fact about the *consuming project*, not about the package, so that judgement belongs to the user (and to the planned *license policy rule*). The one thing siz does flag is an [[#unclear-license|unclear license]]. Like every result signal it is informational: never blocks, filters, or reranks. See ADR 0009.
+_Avoid_: "trust signal" (that is health), "license check"/"compliance" (siz reports, it does not audit or approve), "license type" (the value may be an expression, not a single type).
+
+**Unclear license**:
+A declared-license value that **cannot be resolved from registry metadata alone** — none declared, `UNLICENSED`, or deferred to a file via `SEE LICENSE IN …`. Renders the `⚖` glyph. These differ legally but are identical in what they ask of the user: go read something outside the registry. It is **not** a judgement about the terms — `GPL-3.0-only` is perfectly clear, and the SPDX id `Unlicense` (a public-domain dedication) is clear too, despite resembling `UNLICENSED`.
+_Avoid_: "undeclared license" (`UNLICENSED` and `SEE LICENSE IN …` *are* declarations), "missing license" (covers only one of the cases), "bad"/"restrictive license" (that would be the editorial judgement siz declines to make).
+
+**Unknown license** (absence of data):
+The state where siz **never learned** a package's license — the packument request failed, timed out, or has not returned yet. Strictly distinct from an [[#unclear-license|unclear license]], which is a *finding*. Unknown is the absence of a finding and renders **nothing at all**: no text, no glyph. Conflating the two would let one slow network call flag every result on screen as having no license. See ADR 0009.
+_Avoid_: "no license" (that is a finding, not missing data).
 
 ### Manage
 

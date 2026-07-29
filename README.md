@@ -24,7 +24,7 @@ Siz is a unified package-management workflow layer: an interactive interface ove
 - [x] Download-trend signal — `↑`/`↓` download-count momentum inline on each result (scoped packages excepted)
 - [x] Replacement suggestions for deprecated packages — `→ replaced by …`, parsed from the deprecation message (the successor the maintainer named)
 - [x] Package-size signal — install size shown inline on every result (and bundle size on the focused row), before install
-- [ ] **Later** — License signal — the package's license shown inline (a legal/compatibility fact, distinct from the health-oriented trust signals)
+- [x] License signal — the declared license shown inline on every result (a legal/compatibility fact, distinct from the health-oriented trust signals), with `⚖` when it can't be resolved from registry metadata
 - [ ] **Later** — Ships-types signal — flag whether a package bundles its own TypeScript types or needs a separate `@types/*`
 - [ ] **Later** — Lighter-alternative suggestions for heavy packages — a curated map of leaner swaps (e.g. `moment` → `dayjs`), leaning on the package-size signal
 - [ ] **Later** — AI-assisted search: opt-in LLM query expansion and result reranking
@@ -160,7 +160,7 @@ Pressing **Enter** on an empty box (nothing typed) opens your favorites instead,
 
 ### Trust signals
 
-To help you judge a package _before_ installing, Siz annotates each result with inline **trust signals** — health facts fetched alongside the search:
+To help you judge a package _before_ installing, Siz annotates each result with inline **result signals**, in three families: **trust** signals (health, below), **size** signals (weight), and the **license** signal (legal). All three are purely informational, load progressively, and degrade silently. The trust signals are health facts fetched alongside the search:
 
 | Glyph | Meaning                                                              |
 | ----- | ------------------------------------------------------------------- |
@@ -178,6 +178,25 @@ To help you weigh how *heavy* a package is before adding it, Siz also shows its 
 - **Bundle size** — the minified + gzipped browser-ship weight, **including** transitive dependencies, from [Bundlephobia](https://bundlephobia.com). Because it's slower and rate-limited, it's fetched **only for the focused row** and shown in that row's expanded detail (e.g. `1.4 MB install · 72 kB gz`).
 
 Like trust signals, sizes load progressively, never block the list, and degrade silently if a source is unreachable. The `--list` and `--json` outputs include the install size (`--json` adds an `installSize` field, in bytes, per result); bundle size is interactive-only, so scripting and CI stay fast and off Bundlephobia's rate limit. See [ADR 0008](./docs/adr/0008-package-size-data-sources.md).
+
+### License signal
+
+The third and last signal family answers a question the other two can't: _are we allowed to use this?_ Siz shows each result's declared license inline — `MIT`, `Apache-2.0`, `(MIT OR GPL-3.0-or-later)` — on **every** row, so you can scan a column rather than arrow through packages one at a time. Long expressions are clipped on the row and shown in full on the focused row's detail. It costs nothing extra: the license comes from the same packument request that already fetches install size.
+
+**Siz does not grade licenses.** `MIT` and `GPL-3.0-only` render identically, with no permissive/copyleft tiering and no color by permissiveness. Whether copyleft is a problem is a fact about _your_ project, not about the package, so that call is yours — and eventually your [license policy rules](#features). The one thing siz flags is an **unclear license** — `⚖`, meaning the license can't be resolved from registry metadata at all:
+
+| Declared | Shown |
+| -------- | ----- |
+| `MIT`, `Apache-2.0`, `GPL-3.0-only`, `(MIT OR Apache-2.0)` | the value, verbatim — no glyph |
+| nothing at all | `⚖ no license` |
+| `UNLICENSED` (npm's marker for "no rights granted") | `⚖ UNLICENSED` |
+| `SEE LICENSE IN <file>` | `⚖ see LICENSE file` |
+
+Those four differ legally but ask the same thing of you: go read something outside the registry. Note `⚖` is not a verdict on the terms — and the SPDX id `Unlicense` (a public-domain dedication) is _not_ flagged, despite resembling `UNLICENSED`.
+
+Siz also reads the deprecated license shapes older packages use — the `{ "type": "MIT" }` object, a bare `["MIT", "Apache2"]` array, and the legacy top-level `licenses` key — because reporting a plainly-MIT 2013 package as unlicensed would be worse than showing nothing.
+
+Speaking of which: **"unknown" and "no license" are different**, and siz keeps them apart. If the registry is slow or unreachable, a row shows _nothing_ — no text, no glyph — rather than claiming the package has no license. In `--json` the `license` field is three-valued to preserve that: a **string** when declared, an explicit **`null`** when the package declares none, and **absent** when siz couldn't check. So a CI script can tell a real finding from a failed lookup. See [ADR 0009](./docs/adr/0009-license-signal-data-source.md).
 
 ### Non-interactive output
 
@@ -374,9 +393,10 @@ Siz talks to a few different services depending on what you're doing:
 | Bundle latest-version resolution (`bundle install`) | `npm.antfu.dev` (via `fast-npm-meta`) | Third-party hosted aggregator |
 | Download-trend momentum (`↑`/`↓`) | `api.npmjs.org/downloads` | Official npm download-counts API |
 | Install size (size signal, every result) | `registry.npmjs.org/<pkg>` (packument) | Official npm registry |
+| License signal (every result) | `registry.npmjs.org/<pkg>` (packument — shared with install size, no extra request) | Official npm registry |
 | Bundle size (size signal, focused row only) | `bundlephobia.com/api/size` | Third-party hosted service |
 
-Trust signals, upgrades, and bundle resolution go through **`fast-npm-meta`**, whose default API endpoint is **`https://npm.antfu.dev/`** — a third-party service (maintained by [antfu](https://github.com/antfu)) that mirrors and aggregates the npm registry so this data can be fetched in a single batched request. These calls **degrade silently** if the service is unreachable (trust glyphs simply don't appear; upgrades/bundles surface the failure). Note that `fast-npm-meta` cannot be pointed at the raw `registry.npmjs.org` — it speaks its own aggregation protocol — so removing this dependency would require self-hosting that API or reimplementing the fetches. Package search, download-trend momentum, and **install size** (the packument's `dist.unpackedSize`) use **official npm endpoints** directly. **Bundle size** is the one signal from another third party, [Bundlephobia](https://bundlephobia.com) — fetched only for the focused search row and degrading silently like the rest. See [ADR 0003](./docs/adr/0003-fast-npm-meta-hosted-endpoint.md) and [ADR 0008](./docs/adr/0008-package-size-data-sources.md) for the rationale.
+Trust signals, upgrades, and bundle resolution go through **`fast-npm-meta`**, whose default API endpoint is **`https://npm.antfu.dev/`** — a third-party service (maintained by [antfu](https://github.com/antfu)) that mirrors and aggregates the npm registry so this data can be fetched in a single batched request. These calls **degrade silently** if the service is unreachable (trust glyphs simply don't appear; upgrades/bundles surface the failure). Note that `fast-npm-meta` cannot be pointed at the raw `registry.npmjs.org` — it speaks its own aggregation protocol — so removing this dependency would require self-hosting that API or reimplementing the fetches. Package search, download-trend momentum, **install size** (the packument's `dist.unpackedSize`), and the **license signal** (the packument's `license`) use **official npm endpoints** directly — and the last two share a single packument request per package, so the license adds no network traffic at all. **Bundle size** is the one signal from another third party, [Bundlephobia](https://bundlephobia.com) — fetched only for the focused search row and degrading silently like the rest. See [ADR 0003](./docs/adr/0003-fast-npm-meta-hosted-endpoint.md), [ADR 0008](./docs/adr/0008-package-size-data-sources.md), and [ADR 0009](./docs/adr/0009-license-signal-data-source.md) for the rationale.
 
 ## License
 

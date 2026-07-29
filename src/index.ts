@@ -61,6 +61,15 @@ export {
   HEAVY_INSTALL_BYTES,
 } from './core/size.ts'
 export {
+  fetchLicenses,
+  normalizeLicense,
+  isUnclearLicense,
+  formatLicense,
+  truncateLicense,
+  LICENSE_INLINE_MAX,
+} from './core/license.ts'
+export { fetchManifests, type PackageManifest } from './core/packument.ts'
+export {
   findPackageJson,
   loadProjectManifest,
   loadManifestAt,
