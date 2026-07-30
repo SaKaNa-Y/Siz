@@ -25,6 +25,11 @@ Siz is a unified package-management workflow layer: an interactive interface ove
 - [x] Replacement suggestions for deprecated packages — `→ replaced by …`, parsed from the deprecation message (the successor the maintainer named)
 - [x] Package-size signal — install size shown inline on every result (and bundle size on the focused row), before install
 - [x] License signal — the declared license shown inline on every result (a legal/compatibility fact, distinct from the health-oriented trust signals), with `⚖` when it can't be resolved from registry metadata
+- [ ] **Next** — One search command — name-affinity **ranking** replaces the name-only filter, so a multi-word query (`siz react form validation`, `siz "state management"`) returns results instead of nothing; `siz search` folds into `siz`
+- [ ] **Next** — Weekly download counts inline on every result, replacing npm's retired score bars (the search endpoint now returns a constant `1.000` for quality, popularity and maintenance on every package); scoped packages included via npm's single-package endpoint
+- [ ] **Next** — Deprecation and provenance read from the registry packument siz already fetches per result, leaving the third-party metadata service responsible for publish age alone
+- [ ] **Next** — Signal fetches bounded to the rows on screen (plus a prefetch margin) — fewer requests per search, unchanged progressive rendering; `--list` / `--json` still cover every result they print
+- [ ] **Next** — Heuristic category labels dropped from results, along with the `category:` qualifier — a guessed label sat where facts go
 - [ ] **Later** — Ships-types signal — flag whether a package bundles its own TypeScript types or needs a separate `@types/*`
 - [ ] **Later** — Lighter-alternative suggestions for heavy packages — a curated map of leaner swaps (e.g. `moment` → `dayjs`), leaning on the package-size signal
 - [ ] **Later** — AI-assisted search: opt-in LLM query expansion and result reranking
@@ -36,7 +41,9 @@ Siz is a unified package-management workflow layer: an interactive interface ove
 - [x] Heuristic auto-categorization when you favorite a package
 - [x] Bundles — named recipes that record versions, dep types, and preferred PM, installable together in one step
 - [x] Peer/optional bundle install — a bundle's peer/optional deps install as their true type via the manager's save flag (npm / pnpm / yarn / bun; deno falls back to a regular dependency)
-- [ ] **Later** — Export / import favorites & bundles — shareable JSON, the concrete basis for team-shared presets
+- [ ] **Next** — Bundles as the only saved-package store — favorites migrate into a bundle (non-destructive schema migration), the empty search box lists every saved entry across all bundles tagged with its bundle, and `siz list` prints the same list for scripting
+- [ ] **Next** — Per-entry bundle removal — `siz bundle rm <bundle> <pkg>` removes one entry instead of the whole bundle
+- [ ] **Later** — Export / import bundles — shareable JSON, the concrete basis for team-shared presets
 - [ ] **Later** — Local search and install history
 - [ ] **Maybe** — Seed a bundle from the current project — snapshot the current `package.json` deps into a named bundle
 - [ ] **Maybe** — Team-shared presets — built on export / import
@@ -47,7 +54,8 @@ Siz is a unified package-management workflow layer: an interactive interface ove
 
 - [x] Install via your package manager (npm / pnpm / yarn / bun / deno) — pick it at install time, with a per-package dependency vs devDependency toggle
 - [x] Direct project install / uninstall by name — `siz add <pkg>` installs, `siz rm <pkg>` uninstalls; favoriting moves to `--fav`
-- [ ] **Next** — Non-interactive mode — `--yes` on every mutating command, for CI and scripts
+- [ ] **Next** — `siz add` narrows to two modes (install / `--bundle`) and `siz rm` becomes uninstall-only, as `--fav` retires with favorites
+- [ ] **Next** — Non-interactive mode — `--yes` on every mutating command, for CI and scripts; `--json` / `--list` without a query will exit non-zero instead of opening the interactive box
 - [ ] **Later** — Interactive uninstall picker — `siz rm` with no args opens a picker over installed deps, making removal as interactive as install
 - [ ] **Later** — Run scripts — `siz run <script>` through the detected package manager
 - [ ] **Later** — Execute without installing — `siz x <pkg>` (npx / pnpm dlx / bunx)
@@ -60,6 +68,7 @@ Siz is a unified package-management workflow layer: an interactive interface ove
 - [x] Monorepo install & recursive upgrades — workspace picker on install, `siz upgrade -r`
 - [x] Workspace-aware discovery — honor declared `packages:` / `workspaces` globs, skip stray manifests
 - [x] Outdated report — `siz outdated`, read-only and non-interactive (`--json` for CI, `--exit-code` to gate); shares the version-fetch and comparison core with `siz upgrade`
+- [ ] **Next** — One name for "newest overall" — the redundant `latest` level folds into `major` (bare `siz upgrade` unchanged)
 - [ ] **Next** — Upgrade filters — `--include` / `--exclude` name globs to scope which dependencies are considered before the list renders (`taze` parity)
 - [ ] **Later** — Per-package upgrade modes — pin a package to a fixed level (e.g. always minor) regardless of the global level
 - [ ] **Later** — Trust signals in the outdated report — surface deprecated/stale flags alongside version drift
