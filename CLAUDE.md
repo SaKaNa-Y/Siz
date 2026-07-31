@@ -16,16 +16,16 @@ Usage:
   $ siz [...query]
 
 Commands:
-  [...query]                     Search npm packages by name (use qualifiers like keyword:cli)
-  search [...query]              Full-text search including package descriptions
-  add <package> [...packages]    Install package(s) into the project (--fav to favorite, --bundle to record)
-  bundle <action> [arg1] [arg2]  Manage preset bundles
-  upgrade [level]                Upgrade project dependencies (level: major | minor | patch | latest)
-  outdated                       Report outdated dependencies (read-only)
-  list                           List favorited packages
-  rm <package> [...packages]     Uninstall package(s) from the project (--fav to unfavorite)
-  help                           Show this help message
-  version                        Show the installed version
+  [...query]                        Search npm packages by name (use qualifiers like keyword:cli)
+  search [...query]                 Full-text search including package descriptions
+  add <package> [...packages]       Install package(s) into the project (--fav to favorite, --bundle to record)
+  bundle <action> [arg1] [...args]  Manage preset bundles
+  upgrade [level]                   Upgrade project dependencies (level: major | minor | patch | latest)
+  outdated                          Report outdated dependencies (read-only)
+  list                              List saved packages across all bundles
+  rm <package> [...packages]        Uninstall package(s) from the project (--fav to unfavorite)
+  help                              Show this help message
+  version                           Show the installed version
 
 Options:
   -n, --size <n>  Number of results to fetch (default: 20)
@@ -48,7 +48,7 @@ Examples:
   $ siz upgrade minor
 ```
 
-Per-command help lists the mode flags: `siz add --help` shows `--fav`, `-b/--bundle`, `-D/--dev`, `-s/--strategy`, `--no-rules`; `siz rm --help` shows `--fav`.
+Per-command help lists the mode flags: `siz add --help` shows `--fav`, `-b/--bundle`, `-D/--dev`, `-s/--strategy`, `--no-rules`; `siz rm --help` shows `--fav`; `siz list --help` shows `-b/--bundle`.
 
 **Rule:** whenever a command, option, flag, alias, or example is added, changed, or removed in `src/cli.ts`, update this help block (and the relevant per-command help) to match — `siz -h` is part of the public surface and must never drift from the code.
 
@@ -102,8 +102,8 @@ Three layers, top to bottom: **Commands** orchestrate flow → **Core** holds lo
 
 - bare `siz [query]` → `commands/interactive.ts` (name search; or `commands/search.ts` for `--list` / `--json`); `search [query]` is the same flow over descriptions (full-text)
 - `add <package…>` → `commands/add.ts`; a three-way, mutually-exclusive multiplexer. **Default: installs** the package(s) into the project via the shared `commands/install-runner.ts` (`--fav` + `--bundle` together throws). `--fav` favorites instead (resolves latest, suggests a category; version part dropped). `-b/--bundle <name>` records into that bundle (an explicit `@version` pins the entry `exact`, else `-s/--strategy <latest|exact|caret|tilde>`, default `caret`; `-D/--dev` → devDependencies). `-D/--dev` also marks install-mode deps as dev; `--no-rules` bypasses the guardrail on install. Specs (`react@18`, `@scope/pkg@1.2.3`) are split by `core/pm.parseSpec()` so name-keyed logic uses the bare name while the version flows to the PM
-- `bundle <action> [arg1] [arg2]` → `commands/bundle.ts`; cac matches on the leading token, so one command dispatches on `action`: `list`/`ls`, `install <name>`, `show <name>`, `rm <name>`, `rename <old> <new>`
-- `list`/`ls` (favorites; `-c/--category` filter); `rm <package…>` → `commands/remove.ts`; **default: uninstalls** the package(s) from the project (PM `remove`/`uninstall` via `core/pm.buildRemoveCommand()` — no rules, no confirm, monorepo target picker when ambiguous; orthogonal to favorites), `--fav` removes them from favorites instead
+- `bundle <action> [arg1] [...args]` → `commands/bundle.ts`; cac matches on the leading token, so one command dispatches on `action`: `list`/`ls`, `install <name>`, `show <name>`, `rm <name> [...packages]` (with package names it removes exactly those entries via `core/store.removeFromBundle()` — reporting names that weren't there and leaving an empty bundle behind rather than deleting it; with none it deletes the whole bundle behind the existing confirm), `rename <old> <new>`
+- `list`/`ls` → `commands/list.ts`; prints the flat saved-entry list (`core/store.listSavedEntries()`, rendered by `ui/bundle-render.renderSavedEntryLine()`), with `-b/--bundle <name>` narrowing it to one bundle — the same data the empty-box front door opens; `rm <package…>` → `commands/remove.ts`; **default: uninstalls** the package(s) from the project (PM `remove`/`uninstall` via `core/pm.buildRemoveCommand()` — no rules, no confirm, monorepo target picker when ambiguous; orthogonal to favorites), `--fav` removes them from favorites instead
 - `upgrade [level]` / `up` (alias) → `commands/upgrade.ts`; `level` is `major | minor | patch | latest` (validated in `cli.ts`, defaults to `latest`); `-r/--recursive` discovers every `package.json` under cwd (monorepo mode); `--dry-run` previews without writing or installing
 - `outdated` → `commands/outdated.ts`; the read-only, non-interactive sibling of `upgrade` — reports Current/Wanted/Latest and **never writes or installs**. `-r/--recursive` (workspace-aware) and pnpm catalogs (always on) mirror `upgrade`'s scope; `--json` emits `{ outdated, skipped, summary }` to stdout for CI; `--exit-code` exits non-zero when anything is outdated (default exit `0`). `runOutdated()` returns the exit code, which `cli.ts` assigns to `process.exitCode`
 - `help`, `version` — thin subcommands that reuse cac's built-in `outputHelp()` / `outputVersion()`; the version is sourced from `package.json` (imported), which also backs the `--version` flag
@@ -118,7 +118,7 @@ Three layers, top to bottom: **Commands** orchestrate flow → **Core** holds lo
 
 - `registry.ts` — npm registry search + name/description filtering (fzf) + qualifier handling
 - `query.ts` — parses qualifiers: `keyword:`, `author:`, `scope:`, `category:`, `tag:` (`tag:`/`tags:` is an alias of `keyword:` — folded into npm's native `keywords:` search)
-- `store.ts` — JSON persistence in the user config dir, non-destructive migrations (schema v3: a single `favorites` map, no two-tier track/favorite), and favorite mutators (`addFavorite`, `removeFavorite`, `listFavorites`, `setCategory`)
+- `store.ts` — JSON persistence in the user config dir, non-destructive migrations (schema v3: a single `favorites` map, no two-tier track/favorite), favorite mutators (`addFavorite`, `removeFavorite`, `listFavorites`, `setCategory`), bundle mutators, and the flat saved-entry query `listSavedEntries({ bundle? })` — every bundle entry across all bundles tagged with the bundle it came from, ordered by bundle then package name; one query backs both `siz list` and the empty-box front door. `removeFromBundle()` reports `{ removed, missing }` and leaves an empty bundle rather than deleting it
 - `categories.ts` — heuristic categorization (Frontend, Backend, Testing, …) from name/description/keywords
 - `pm.ts` — detect npm/pnpm/yarn/bun/deno and build install commands (incl. dev deps), the uninstall command (`buildRemoveCommand`, via `resolveCommand(agent, 'uninstall', …)`), and the sync/install command (`buildSyncCommand`, `runInstall`) used by upgrade; `parseSpec()` splits a `pkg@version` spec (scope-aware) into name + version; uses `package-manager-detector`
 - `meta.ts` — fast version resolution via `fast-npm-meta`

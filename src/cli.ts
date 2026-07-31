@@ -98,18 +98,14 @@ cli
 
 // cac matches commands by a single leading token, so the bundle subcommands
 // live under one command that dispatches on `action` (e.g. `siz bundle list`).
-const BUNDLE_USAGE = 'Use: list | install <name> | show <name> | rm <name> | rename <old> <new>'
+const BUNDLE_USAGE =
+  'Use: list | install <name> | show <name> | rm <name> [...packages] | rename <old> <new>'
 
 cli
-  .command('bundle <action> [arg1] [arg2]', 'Manage preset bundles')
+  .command('bundle <action> [arg1] [...args]', 'Manage preset bundles')
   .option('--no-rules', 'Bypass dependency rules in siz.config.json (bundle install)')
   .action(
-    async (
-      action: string,
-      arg1: string | undefined,
-      arg2: string | undefined,
-      opts: { rules?: boolean },
-    ) => {
+    async (action: string, arg1: string | undefined, args: string[], opts: { rules?: boolean }) => {
       switch (action) {
         case 'list':
         case 'ls':
@@ -124,13 +120,15 @@ cli
           runBundleShow(arg1)
           return
         case 'rm':
-          if (!arg1) throw new Error('Usage: siz bundle rm <name>')
-          await runBundleRemove(arg1)
+          if (!arg1) throw new Error('Usage: siz bundle rm <name> [...packages]')
+          await runBundleRemove(arg1, args)
           return
-        case 'rename':
-          if (!arg1 || !arg2) throw new Error('Usage: siz bundle rename <old> <new>')
-          runBundleRename(arg1, arg2)
+        case 'rename': {
+          const [newName] = args
+          if (!arg1 || !newName) throw new Error('Usage: siz bundle rename <old> <new>')
+          runBundleRename(arg1, newName)
           return
+        }
         default:
           throw new Error(`Unknown bundle action "${action}". ${BUNDLE_USAGE}`)
       }
@@ -169,11 +167,11 @@ cli
   })
 
 cli
-  .command('list', 'List favorited packages')
+  .command('list', 'List saved packages across all bundles')
   .alias('ls')
-  .option('-c, --category <category>', 'Filter by category')
-  .action((opts: { category?: string }) => {
-    runList({ category: opts.category })
+  .option('-b, --bundle <name>', 'Only list entries saved in this bundle')
+  .action((opts: { bundle?: string }) => {
+    runList({ bundle: opts.bundle })
   })
 
 cli

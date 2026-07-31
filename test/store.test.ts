@@ -10,6 +10,7 @@ import {
   getBundle,
   listBundles,
   listFavorites,
+  listSavedEntries,
   loadData,
   migrate,
   removeBundle,
@@ -229,6 +230,52 @@ describe('bundle mutators', () => {
     )
     removeFromBundle('stack', ['a'], file)
     expect(Object.keys(getBundle('stack', file)!.packages)).toEqual(['b'])
+  })
+
+  it('removeFromBundle reports names that were not in the bundle', () => {
+    addToBundle('stack', [{ name: 'a', strategy: 'caret', depType: 'dependencies' }], file)
+
+    const result = removeFromBundle('stack', ['a', 'nope'], file)
+    expect(result!.removed).toEqual(['a'])
+    expect(result!.missing).toEqual(['nope'])
+    // Removing the last entry leaves an empty bundle rather than deleting it.
+    expect(getBundle('stack', file)!.packages).toEqual({})
+    expect(removeFromBundle('absent', ['a'], file)).toBeUndefined()
+  })
+
+  it('lists every entry across bundles, tagged, ordered by bundle then name', () => {
+    addToBundle(
+      'zeta',
+      [
+        { name: 'vue', strategy: 'caret', depType: 'dependencies' },
+        { name: 'axios', strategy: 'exact', depType: 'dependencies', version: '1.2.3' },
+      ],
+      file,
+    )
+    addToBundle('alpha', [{ name: 'vitest', strategy: 'caret', depType: 'devDependencies' }], file)
+
+    const entries = listSavedEntries({}, file)
+    expect(entries.map((e) => [e.bundle, e.name])).toEqual([
+      ['alpha', 'vitest'],
+      ['zeta', 'axios'],
+      ['zeta', 'vue'],
+    ])
+    // Entries carry their bundle metadata through unchanged.
+    expect(entries[1]).toMatchObject({ strategy: 'exact', version: '1.2.3' })
+    expect(entries[0].depType).toBe('devDependencies')
+  })
+
+  it('filters saved entries to a single bundle and returns nothing for an empty store', () => {
+    expect(listSavedEntries({}, file)).toEqual([])
+
+    addToBundle('a', [{ name: 'p1', strategy: 'caret', depType: 'dependencies' }], file)
+    addToBundle('b', [{ name: 'p2', strategy: 'caret', depType: 'dependencies' }], file)
+
+    expect(listSavedEntries({ bundle: 'b' }, file).map((e) => e.name)).toEqual(['p2'])
+    expect(listSavedEntries({ bundle: 'missing' }, file)).toEqual([])
+    // An empty bundle contributes no entries.
+    upsertBundle('empty', {}, file)
+    expect(listSavedEntries({}, file).map((e) => e.name)).toEqual(['p1', 'p2'])
   })
 
   it('listBundles sorts by lastUsedAt desc, then name', () => {

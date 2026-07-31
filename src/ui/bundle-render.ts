@@ -1,6 +1,6 @@
 import ansis from 'ansis'
 
-import type { Bundle, BundlePackage, VersionStrategy } from '../core/types.ts'
+import type { Bundle, BundlePackage, SavedEntry, VersionStrategy } from '../core/types.ts'
 
 import { type BundleInstallItem, isPinned } from '../core/bundle.ts'
 
@@ -35,10 +35,24 @@ export function depTypeLabel(depType: BundlePackage['depType']): string {
 /** One package line for `bundle show`, e.g. `  react  =18.2.0  [dep]` or `  react  ^  [dep]`. */
 export function renderBundlePackageLine(entry: BundlePackage): string {
   // Pinned entries show the locked version (`=18.2.0`); others show the range symbol.
-  const range = isPinned(entry)
+  return `  ${ansis.bold(entry.name)}  ${rangeLabel(entry)} ${depTypeLabel(entry.depType)}`
+}
+
+/** The version range a bundle entry installs as: `=18.2.0` when pinned, else `^`/`~`/`latest`. */
+function rangeLabel(entry: BundlePackage): string {
+  return isPinned(entry)
     ? ansis.cyan(`=${entry.version}`)
     : ansis.cyan(strategyLabel(entry.strategy))
-  return `  ${ansis.bold(entry.name)}  ${range} ${depTypeLabel(entry.depType)}`
+}
+
+/** Confirmation line for `siz bundle rm <name> <pkg...>`. */
+export function formatBundleRemoval(name: string, removed: string[]): string {
+  return `${ansis.green('✓')} Removed ${removed.map((p) => ansis.bold(p)).join(', ')} from ${ansis.bold(name)}`
+}
+
+/** One saved-entry line for `siz list`, tagged with the bundle it came from. */
+export function renderSavedEntryLine(entry: SavedEntry): string {
+  return `${ansis.bold(entry.name)}  ${rangeLabel(entry)} ${depTypeLabel(entry.depType)}  ${ansis.dim(entry.bundle)}`
 }
 
 /** Format an ISO timestamp as a short date, or `never`. */

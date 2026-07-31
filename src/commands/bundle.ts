@@ -12,9 +12,17 @@ import {
   saveFlag,
   type SpecSelection,
 } from '../core/pm.ts'
-import { getBundle, listBundles, removeBundle, renameBundle, touchBundle } from '../core/store.ts'
+import {
+  getBundle,
+  listBundles,
+  removeBundle,
+  removeFromBundle,
+  renameBundle,
+  touchBundle,
+} from '../core/store.ts'
 import {
   bundleInstallOptionLabel,
+  formatBundleRemoval,
   renderBundleList,
   renderBundleShow,
 } from '../ui/bundle-render.ts'
@@ -47,14 +55,35 @@ export function runBundleShow(name: string): void {
   console.log(renderBundleShow(bundle))
 }
 
-/** `siz bundle rm <name>` — delete a bundle after confirmation. */
-export async function runBundleRemove(name: string): Promise<void> {
-  const bundle = getBundle(name)
-  if (!bundle) {
+/**
+ * `siz bundle rm <name> [...packages]` — remove the named entries from a bundle,
+ * or (with no package names) delete the whole bundle after confirmation.
+ */
+export async function runBundleRemove(name: string, packages: string[] = []): Promise<void> {
+  // Per-entry removal: no confirmation, and a name that isn't in the bundle is
+  // reported rather than failing the command.
+  if (packages.length > 0) {
+    const result = removeFromBundle(name, packages)
+    if (!result) {
+      console.error(ansis.red(`Bundle "${name}" not found.`))
+      process.exitCode = 1
+      return
+    }
+    if (result.removed.length) {
+      console.log(formatBundleRemoval(name, result.removed))
+    }
+    if (result.missing.length) {
+      console.log(ansis.yellow(`Not in "${name}": ${result.missing.join(', ')}`))
+    }
+    return
+  }
+
+  if (!getBundle(name)) {
     console.error(ansis.red(`Bundle "${name}" not found.`))
     process.exitCode = 1
     return
   }
+
   clack.intro(ansis.bold.cyan('siz bundle rm'))
   const ok = ensure(
     await clack.confirm({ message: `Delete bundle "${name}"?`, initialValue: false }),

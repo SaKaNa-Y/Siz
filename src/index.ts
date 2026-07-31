@@ -16,6 +16,8 @@ export {
   removeFromBundle,
   getBundle,
   listBundles,
+  listSavedEntries,
+  type BundleRemoval,
   removeBundle,
   renameBundle,
   touchBundle,

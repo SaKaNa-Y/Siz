@@ -41,6 +41,14 @@ export interface BundlePackage {
   version?: string
 }
 
+/**
+ * One saved package as the flat store surfaces it: a bundle entry tagged with
+ * the bundle it came from. Backs the interactive front door and `siz list`.
+ */
+export interface SavedEntry extends BundlePackage {
+  bundle: string
+}
+
 /** A named, reusable collection of packages for one-click installation. */
 export interface Bundle {
   name: string

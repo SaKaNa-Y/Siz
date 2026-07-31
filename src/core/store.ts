@@ -3,7 +3,7 @@ import type { Agent } from 'package-manager-detector'
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 
-import type { Bundle, BundlePackage, FavoritePackage, SizData } from './types.ts'
+import type { Bundle, BundlePackage, FavoritePackage, SavedEntry, SizData } from './types.ts'
 
 import { getDataFile } from './paths.ts'
 
@@ -219,17 +219,39 @@ export function addToBundle(name: string, entries: BundlePackage[], file?: strin
   })
 }
 
-/** Remove package entries from a bundle. Returns undefined if the bundle is missing. */
+/** Outcome of a per-entry bundle removal: what went, and what was never there. */
+export interface BundleRemoval {
+  bundle: Bundle
+  /** Names that existed in the bundle and were deleted. */
+  removed: string[]
+  /** Names that were not in the bundle — reportable, not an error. */
+  missing: string[]
+}
+
+/**
+ * Remove package entries from a bundle. Returns undefined if the bundle is
+ * missing; otherwise reports which names went and which were never there.
+ * Removing every entry leaves an empty bundle — it never deletes the bundle.
+ */
 export function removeFromBundle(
   name: string,
   pkgNames: string[],
   file?: string,
-): Bundle | undefined {
+): BundleRemoval | undefined {
   return withData(file, (data) => {
     const bundle = data.bundles[name]
     if (!bundle) return undefined
-    for (const pkg of pkgNames) delete bundle.packages[pkg]
-    return bundle
+    const removed: string[] = []
+    const missing: string[] = []
+    for (const pkg of pkgNames) {
+      if (bundle.packages[pkg]) {
+        delete bundle.packages[pkg]
+        removed.push(pkg)
+      } else {
+        missing.push(pkg)
+      }
+    }
+    return { bundle, removed, missing }
   })
 }
 
@@ -273,6 +295,26 @@ export function renameBundle(
     delete data.bundles[oldName]
     return 'ok'
   })
+}
+
+/**
+ * Every bundle entry, flattened across all bundles and tagged with the bundle it
+ * came from. One query backs both the interactive front door and `siz list`, so
+ * the two views are the same data by construction.
+ *
+ * Order is stable and independent of insertion order: bundle name, then package
+ * name, both alphabetically.
+ */
+export function listSavedEntries(filters: { bundle?: string } = {}, file?: string): SavedEntry[] {
+  const data = loadData(file ?? getDataFile())
+  const entries: SavedEntry[] = []
+  for (const bundle of Object.values(data.bundles)) {
+    if (filters.bundle && bundle.name !== filters.bundle) continue
+    for (const pkg of Object.values(bundle.packages)) entries.push({ ...pkg, bundle: bundle.name })
+  }
+  return entries.toSorted(
+    (a, b) => a.bundle.localeCompare(b.bundle) || a.name.localeCompare(b.name),
+  )
 }
 
 /** Stamp a bundle's lastUsedAt with the current time. */

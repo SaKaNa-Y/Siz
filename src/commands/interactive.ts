@@ -12,12 +12,11 @@ import type {
   TrustSignals,
 } from '../core/types.ts'
 
-import { normalizeCategory, suggestCategory } from '../core/categories.ts'
+import { suggestCategory } from '../core/categories.ts'
 import { fetchLicenses } from '../core/license.ts'
-import { parseQuery } from '../core/query.ts'
 import { type SearchMode, searchPackages } from '../core/registry.ts'
 import { fetchBundleSize, fetchInstallSizes } from '../core/size.ts'
-import { addFavorite, addToBundle, listFavorites } from '../core/store.ts'
+import { addFavorite, addToBundle, listFavorites, listSavedEntries } from '../core/store.ts'
 import { fetchDownloadTrend, fetchTrustSignals } from '../core/trust.ts'
 import { highlightKeywords } from '../ui/highlight.ts'
 import { clack, ensure, pickOrCreateBundle, pickSetAction } from '../ui/prompts.ts'
@@ -92,7 +91,7 @@ async function openSearchBox(seedQuery: string | undefined, mode: SearchMode): P
   const placeholder =
     mode === 'description'
       ? 'full-text search · try keyword:cli or author:name'
-      : 'search by name · try keyword:cli · Enter (empty) to browse favorites'
+      : 'search by name · try keyword:cli · Enter (empty) to browse saved packages'
 
   // The favorites list does not change while the box is open (favoriting happens
   // later in runSetAction), so read it once instead of on every keystroke.
@@ -329,32 +328,31 @@ async function runSetAction(
   }
 }
 
-/** Empty-input path: pick from the user's favorited packages. */
-async function runBrowseFavorites(
-  filters: { category?: string } = {},
-  opts: { noRules?: boolean } = {},
-): Promise<void> {
-  const favorites = listFavorites(filters)
+/**
+ * Empty-input path: pick from every package saved across all bundles, each row
+ * tagged with the bundle it came from. Selections flow into the same action set
+ * search selections use.
+ */
+async function runBrowseSaved(opts: { noRules?: boolean } = {}): Promise<void> {
+  const entries = listSavedEntries()
 
-  if (favorites.length === 0) {
-    const filtered = filters.category
-    clack.log.info(
-      filtered
-        ? 'No favorites match that filter.'
-        : 'No favorites yet. Search and Favorite some first.',
-    )
+  if (entries.length === 0) {
+    clack.log.info('Nothing saved yet. Search, then use "Add to bundle".')
     clack.outro('Done.')
     return
   }
 
+  // Rows are keyed by list position: the same package can be saved in more than
+  // one bundle, and bundle names are free-form, so no composed string key is
+  // guaranteed unique.
   const selected = ensure(
-    await clack.multiselect<string>({
-      message: 'Your favorite packages',
+    await clack.multiselect<number>({
+      message: 'Your saved packages',
       required: false,
-      options: favorites.map((pkg) => ({
-        value: pkg.name,
-        label: pkg.name,
-        hint: pkg.category || undefined,
+      options: entries.map((entry, index) => ({
+        value: index,
+        label: `${entry.name} ${ansis.dim(entry.bundle)}`,
+        hint: entry.depType === 'devDependencies' ? 'dev' : undefined,
       })),
     }),
   )
@@ -363,11 +361,19 @@ async function runBrowseFavorites(
     clack.outro('Nothing selected.')
     return
   }
-  // The favorites view has no Ctrl+T marking, so default everything to dependency.
-  await runSetAction(
-    selected.map((name) => ({ name, dev: false })),
-    opts,
-  )
+
+  // One install per package name: the same package saved in two bundles collapses
+  // to its first entry in the store's order (bundle name, then package name), so
+  // which dep type wins is deterministic rather than whichever row came last.
+  const selections = new Map<string, Selection>()
+  for (const index of selected) {
+    const entry = entries[index]
+    // The saved view has no Ctrl+T marking, so the stored dep type decides.
+    if (!selections.has(entry.name)) {
+      selections.set(entry.name, { name: entry.name, dev: entry.depType === 'devDependencies' })
+    }
+  }
+  await runSetAction([...selections.values()], opts)
 }
 
 /** Entry point for bare `siz` (and `siz <query>` which seeds the box). */
@@ -382,18 +388,9 @@ export async function runInteractive(
     case 'cancel':
       clack.cancel('Cancelled.')
       return
-    case 'empty': {
-      // Carry the category qualifier from the seed into the favorites view,
-      // which filters against the user's own categories.
-      const { qualifiers } = parseQuery(seedQuery ?? '')
-      await runBrowseFavorites(
-        {
-          category: qualifiers.category ? normalizeCategory(qualifiers.category) : undefined,
-        },
-        opts,
-      )
+    case 'empty':
+      await runBrowseSaved(opts)
       return
-    }
     case 'selected':
       await runSetAction(result.selections, opts)
       return
