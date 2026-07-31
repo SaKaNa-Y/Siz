@@ -7,10 +7,6 @@ export {
   saveData,
   migrate,
   emptyData,
-  addFavorite,
-  setCategory,
-  removeFavorite,
-  listFavorites,
   upsertBundle,
   addToBundle,
   removeFromBundle,
@@ -23,6 +19,7 @@ export {
   touchBundle,
   type BundleMeta,
   CURRENT_VERSION,
+  FAVORITES_BUNDLE,
 } from './core/store.ts'
 export {
   resolveBundleInstall,

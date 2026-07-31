@@ -1,7 +1,6 @@
 import ansis from 'ansis'
 
 import type {
-  FavoritePackage,
   LicenseSignals,
   SearchResult,
   SizeSignals,
@@ -115,7 +114,6 @@ export function licenseDetail(license: LicenseSignals): string {
 export function renderSearchResult(
   r: SearchResult,
   state: {
-    favorite?: boolean
     showDescription?: boolean
     signals?: TrustSignals
     size?: SizeSignals
@@ -124,10 +122,9 @@ export function renderSearchResult(
   } = {},
 ): string {
   const { showDescription = true } = state
-  const marks = state.favorite ? ansis.red('★ fav') : ''
 
   const label = categoryLabel(r)
-  const header = `${label ? `${label} ` : ''}${ansis.bold.cyan(r.name)} ${ansis.dim(`v${r.version}`)}${marks ? `  ${marks}` : ''}`
+  const header = `${label ? `${label} ` : ''}${ansis.bold.cyan(r.name)} ${ansis.dim(`v${r.version}`)}`
   const desc = !showDescription
     ? ''
     : r.description
@@ -163,12 +160,4 @@ export function formatBlockedNotice(
     (b) => `  ${ansis.red('✗')} ${ansis.bold(b.name)} ${ansis.dim(`— ${b.reason}`)}`,
   )
   return [`Blocked by dependency rules (${ansis.dim(configPath)}):`, ...lines].join('\n')
-}
-
-/** Render a favorited package as a compact one-liner for `siz list`. */
-export function renderFavoriteLine(p: FavoritePackage): string {
-  const name = ansis.bold(p.name)
-  const version = p.version ? ansis.dim(` v${p.version}`) : ''
-  const category = p.category ? ` ${ansis.magenta(`[${p.category}]`)}` : ''
-  return `${ansis.red('★')} ${name}${version}${category}`
 }

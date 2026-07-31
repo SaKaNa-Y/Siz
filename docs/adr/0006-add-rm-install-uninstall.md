@@ -2,7 +2,7 @@
 
 ## Status
 
-accepted
+accepted — partially superseded: favorites (and with them `--fav`) were removed when bundles became the only saved-package store, completing the direction this ADR set. `siz add` is now a **two**-way multiplexer (install / `--bundle`) and `siz rm` is uninstall-only with no mode flag. The verb remap itself stands; only the `--fav` half below is historical.
 
 ## Context & Decision
 

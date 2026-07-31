@@ -1,22 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { runInstallSelections } from '../src/commands/install-runner.ts'
-import { resolveLatest } from '../src/core/meta.ts'
-import { addFavorite, addToBundle } from '../src/core/store.ts'
+import { assertNoRemovedFlags } from '../src/commands/removed-flags.ts'
+import { addToBundle } from '../src/core/store.ts'
 
-// Mock the store, version resolver, install runner, and prompts so runAdd's mode
-// dispatch can be asserted without touching the real data store or the network.
-vi.mock('../src/core/store.ts', () => ({
-  addToBundle: vi.fn(),
-  addFavorite: vi.fn((p: { name: string; version?: string; category?: string }) => ({
-    ...p,
-    addedAt: 'x',
-  })),
-}))
-
-vi.mock('../src/core/meta.ts', () => ({
-  resolveLatest: vi.fn(async (name: string) => ({ name, version: '1.0.0', exists: true })),
-}))
+// Mock the store, install runner, and prompts so runAdd's mode dispatch can be
+// asserted without touching the real data store or the network.
+vi.mock('../src/core/store.ts', () => ({ addToBundle: vi.fn() }))
 
 vi.mock('../src/commands/install-runner.ts', () => ({
   runInstallSelections: vi.fn(async () => {}),
@@ -31,10 +21,6 @@ beforeEach(() => {
 })
 
 describe('runAdd mode dispatch', () => {
-  it('rejects --fav together with --bundle', async () => {
-    await expect(runAdd(['react'], { fav: true, bundle: 'x' })).rejects.toThrow(/not both/)
-  })
-
   it('installs by default, passing dep type and specs through', async () => {
     await runAdd(['react', 'vue@18'], { dev: true, noRules: true })
     expect(runInstallSelections).toHaveBeenCalledWith(
@@ -44,15 +30,7 @@ describe('runAdd mode dispatch', () => {
       ],
       { noRules: true },
     )
-    expect(addFavorite).not.toHaveBeenCalled()
     expect(addToBundle).not.toHaveBeenCalled()
-  })
-
-  it('favorites with --fav, keyed on the bare name', async () => {
-    await runAdd(['lodash@4'], { fav: true })
-    expect(resolveLatest).toHaveBeenCalledWith('lodash')
-    expect(addFavorite).toHaveBeenCalledWith(expect.objectContaining({ name: 'lodash' }))
-    expect(runInstallSelections).not.toHaveBeenCalled()
   })
 
   it('records into a bundle, pinning an explicit @version as exact', async () => {
@@ -69,12 +47,18 @@ describe('runAdd mode dispatch', () => {
       { name: 'vitest', strategy: 'tilde', depType: 'devDependencies' },
     ])
   })
+})
 
-  it('warns but proceeds when --dev is combined with --fav', async () => {
-    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
-    await runAdd(['react'], { fav: true, dev: true })
-    expect(log.mock.calls.flat().join('\n')).toMatch(/--dev has no effect with --fav/)
-    expect(addFavorite).toHaveBeenCalled()
-    log.mockRestore()
+describe('removed flags', () => {
+  it('rejects --fav with a message naming the replacement flow', () => {
+    expect(() => assertNoRemovedFlags(['add', 'zod', '--fav'])).toThrow(/--bundle/)
+    expect(() => assertNoRemovedFlags(['rm', 'zod', '--fav'])).toThrow(/bundle rm/)
+    // `--fav=true` is the same flag.
+    expect(() => assertNoRemovedFlags(['add', 'zod', '--fav=true'])).toThrow(/favorites/)
+  })
+
+  it('leaves supported argv alone', () => {
+    expect(() => assertNoRemovedFlags(['add', 'zod', '--bundle', 'stack'])).not.toThrow()
+    expect(() => assertNoRemovedFlags(['add', 'favicon-tool'])).not.toThrow()
   })
 })

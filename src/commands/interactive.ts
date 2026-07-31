@@ -5,18 +5,16 @@ import process from 'node:process'
 import type {
   BundleDepType,
   BundlePackage,
-  FavoritePackage,
   LicenseSignals,
   SearchResult,
   SizeSignals,
   TrustSignals,
 } from '../core/types.ts'
 
-import { suggestCategory } from '../core/categories.ts'
 import { fetchLicenses } from '../core/license.ts'
 import { type SearchMode, searchPackages } from '../core/registry.ts'
 import { fetchBundleSize, fetchInstallSizes } from '../core/size.ts'
-import { addFavorite, addToBundle, listFavorites, listSavedEntries } from '../core/store.ts'
+import { addToBundle, listSavedEntries } from '../core/store.ts'
 import { fetchDownloadTrend, fetchTrustSignals } from '../core/trust.ts'
 import { highlightKeywords } from '../ui/highlight.ts'
 import { clack, ensure, pickOrCreateBundle, pickSetAction } from '../ui/prompts.ts'
@@ -33,7 +31,7 @@ import {
 import { searchPrompt, type SearchOption } from '../ui/search-prompt.ts'
 import { runInstallSelections } from './install-runner.ts'
 
-/** Versions seen during search, so favoriting can store them. */
+/** Versions seen during search, so an exact bundle entry can pin them. */
 const versionCache = new Map<string, string>()
 
 function openInBrowser(url: string): void {
@@ -55,18 +53,8 @@ type BoxResult =
   | { kind: 'selected'; selections: Selection[] }
 
 /** Build the per-result option label/hint, depending on the search mode. */
-function toSearchOption(
-  pkg: SearchResult,
-  input: string,
-  mode: SearchMode,
-  favorite?: FavoritePackage,
-): SearchOption {
-  // Category prefix: stored category for favorited packages, otherwise the
-  // heuristic category guess.
-  let prefix: string
-  if (!favorite) prefix = categoryLabel(pkg)
-  else prefix = favorite.category ? ansis.magenta(`[${favorite.category}]`) : ''
-
+function toSearchOption(pkg: SearchResult, input: string, mode: SearchMode): SearchOption {
+  const prefix = categoryLabel(pkg)
   const name = `${highlightKeywords(pkg.name, input)} ${ansis.blue(`v${pkg.version}`)}`
   const label = prefix ? `${prefix} ${name}` : name
 
@@ -92,10 +80,6 @@ async function openSearchBox(seedQuery: string | undefined, mode: SearchMode): P
     mode === 'description'
       ? 'full-text search · try keyword:cli or author:name'
       : 'search by name · try keyword:cli · Enter (empty) to browse saved packages'
-
-  // The favorites list does not change while the box is open (favoriting happens
-  // later in runSetAction), so read it once instead of on every keystroke.
-  const favoritesByName = new Map(listFavorites().map((p) => [p.name, p]))
 
   // Per-package dependency type, populated by Ctrl+T inside the prompt.
   const depTypes = new Map<string, boolean>()
@@ -196,7 +180,7 @@ async function openSearchBox(seedQuery: string | undefined, mode: SearchMode): P
             const exactMatch = results.find((pkg) => pkg.name === input)
             searchResults = results
               .filter((pkg) => pkg.name !== input)
-              .map((pkg) => toSearchOption(pkg, input, mode, favoritesByName.get(pkg.name)))
+              .map((pkg) => toSearchOption(pkg, input, mode))
 
             const updatedOpts: SearchOption[] = []
             if (isPackageName) {
@@ -265,11 +249,6 @@ async function openSearchBox(seedQuery: string | undefined, mode: SearchMode): P
   return { kind: 'selected', selections }
 }
 
-/** Favorite a searched package, carrying over its cached version and a category guess. */
-function favoriteFromSearch(name: string): void {
-  addFavorite({ name, version: versionCache.get(name), category: suggestCategory({ name }) })
-}
-
 /** Run the chosen action against a set of selected packages. */
 async function runSetAction(
   selections: Selection[],
@@ -286,13 +265,6 @@ async function runSetAction(
       // The interactive path keeps its PM picker and confirm; the shared runner
       // handles monorepo target selection, the rules guardrail, and execution.
       await runInstallSelections(selections, { noRules: opts.noRules, pickPM: true, confirm: true })
-      return
-    }
-
-    case 'favorite': {
-      for (const name of names) favoriteFromSearch(name)
-      clack.log.success(`Favorited ${names.join(', ')}`)
-      clack.outro('Done.')
       return
     }
 

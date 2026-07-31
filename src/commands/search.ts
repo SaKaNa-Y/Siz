@@ -5,7 +5,6 @@ import type { TrustSignals } from '../core/types.ts'
 import { fetchLicenses } from '../core/license.ts'
 import { type SearchMode, searchPackages } from '../core/registry.ts'
 import { fetchInstallSizes } from '../core/size.ts'
-import { listFavorites } from '../core/store.ts'
 import { fetchDownloadTrend, fetchTrustSignals } from '../core/trust.ts'
 import { renderSearchResult } from '../ui/render.ts'
 
@@ -60,11 +59,9 @@ export async function runSearchPrint(query: string, opts: SearchPrintOptions = {
 
   // Name mode hides descriptions/keywords to match the interactive behavior.
   const showDescription = mode === 'description'
-  const favoriteNames = new Set(listFavorites().map((p) => p.name))
   for (const r of results) {
     console.log(
       renderSearchResult(r, {
-        favorite: favoriteNames.has(r.name),
         showDescription,
         signals: signals.get(r.name),
         size: installSizes.has(r.name) ? { installSize: installSizes.get(r.name) } : undefined,

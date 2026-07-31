@@ -1,6 +1,6 @@
 # Siz
 
-`siz` is a CLI for discovering, favoriting, and installing npm packages. This glossary fixes the language used across its three tracks — Discover, Organize, Manage.
+`siz` is a CLI for discovering, saving, and installing npm packages. This glossary fixes the language used across its three tracks — Discover, Organize, Manage.
 
 ## Language
 
@@ -67,7 +67,7 @@ A project's committed policy about which packages may enter it, declared in [[#s
 _Avoid_: "lockfile", "constraint" (versions are out of scope), "permission" (these are project-level, not user-level).
 
 **Guardrail**:
-The Manage-track enforcement of [[#dependency-rule|dependency rules]] at the moment a package would **enter the project** — i.e. the install paths only (the interactive Install action, the direct `siz add` install, and `bundle install`). It blocks denied packages before install; it does not touch favorites, bundle records, upgrades, or uninstalls (`siz rm` — removing a package never adds one). Distinct from the [[#audit|audit]], which inspects packages already present.
+The Manage-track enforcement of [[#dependency-rule|dependency rules]] at the moment a package would **enter the project** — i.e. the install paths only (the interactive Install action, the direct `siz add` install, and `bundle install`). It blocks denied packages before install; it does not touch bundle records, upgrades, or uninstalls (`siz rm` — removing a package never adds one). Distinct from the [[#audit|audit]], which inspects packages already present.
 _Avoid_: "lint", "check" (that is the audit); "filter" (it blocks, it does not reorder or hide search results).
 
 **Allow / deny** (rule semantics):
@@ -93,4 +93,4 @@ The neutral, per-dependency comparison of a declared range against the registry'
 _Avoid_: "scan" (that is [[#dependency-scan|discovery]]-only — it names *what* to query; comparison consumes the fetched data), "resolve" (that is `upgrade`'s target resolution, one specialization of this).
 
 **`siz.config.json`**:
-The project-local, committable file (nearest one, walking up from the working directory) that holds a project's [[#dependency-rule|dependency rules]]. A single root file governs the whole repository, including every workspace. Distinct from the user-global data store in the config dir, which holds favorites and bundles. Absent file ⇒ no rules; malformed file ⇒ siz fails closed (aborts) rather than permitting everything.
+The project-local, committable file (nearest one, walking up from the working directory) that holds a project's [[#dependency-rule|dependency rules]]. A single root file governs the whole repository, including every workspace. Distinct from the user-global data store in the config dir, which holds bundles. Absent file ⇒ no rules; malformed file ⇒ siz fails closed (aborts) rather than permitting everything.

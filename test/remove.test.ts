@@ -2,9 +2,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { detectPM, runInstall } from '../src/core/pm.ts'
 import { discoverManifests } from '../src/core/project.ts'
-import { removeFavorite } from '../src/core/store.ts'
-
-vi.mock('../src/core/store.ts', () => ({ removeFavorite: vi.fn(() => true) }))
 
 // Keep the real command builders + parseSpec; stub only PM detection and exec.
 vi.mock('../src/core/pm.ts', async (importActual) => {
@@ -43,17 +40,9 @@ beforeEach(() => {
   ])
 })
 
-describe('runRemove mode dispatch', () => {
-  it('removes favorites with --fav and never runs the package manager', async () => {
-    await runRemove(['react', 'vue'], { fav: true })
-    expect(removeFavorite).toHaveBeenCalledWith('react')
-    expect(removeFavorite).toHaveBeenCalledWith('vue')
-    expect(runInstall).not.toHaveBeenCalled()
-  })
-
-  it('uninstalls by default via the detected package manager', async () => {
+describe('runRemove', () => {
+  it('always uninstalls via the detected package manager — there is no other mode', async () => {
     await runRemove(['lodash'])
-    expect(removeFavorite).not.toHaveBeenCalled()
     expect(vi.mocked(runInstall).mock.calls[0][0]).toEqual({
       command: 'pnpm',
       args: ['remove', 'lodash'],

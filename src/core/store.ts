@@ -3,19 +3,20 @@ import type { Agent } from 'package-manager-detector'
 import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 
-import type { Bundle, BundlePackage, FavoritePackage, SavedEntry, SizData } from './types.ts'
+import type { Bundle, BundlePackage, SavedEntry, SizData } from './types.ts'
 
 import { getDataFile } from './paths.ts'
 
 /** Current schema version. Bump when adding a migration step below. */
-export const CURRENT_VERSION = 3
+export const CURRENT_VERSION = 4
 
 const SCHEMA_HINT = 'https://github.com/siz-cli/siz/schema.json'
 
-/** A fresh, default-initialized favorite record. */
-function newFavorite(name: string): FavoritePackage {
-  return { name, addedAt: new Date().toISOString() }
-}
+/**
+ * Bundle that v3 favorites are migrated into. Named so an upgrading user can
+ * find their curated packages immediately (`siz list -b favorites`).
+ */
+export const FAVORITES_BUNDLE = 'favorites'
 
 /** A fresh, default-initialized bundle record. */
 function newBundle(name: string): Bundle {
@@ -27,7 +28,6 @@ export function emptyData(): SizData {
   return {
     $schema: SCHEMA_HINT,
     version: CURRENT_VERSION,
-    favorites: {},
     bundles: {},
     settings: {},
   }
@@ -36,9 +36,11 @@ export function emptyData(): SizData {
 /**
  * Migrate raw on-disk data up to CURRENT_VERSION.
  *
- * IMPORTANT: every step is *non-destructive*. We only add, rename, or transform
- * fields and never drop a stored package or unknown keys. This is what
- * guarantees user data survives Siz upgrades.
+ * IMPORTANT: no step ever drops a stored **package**, and unknown top-level keys
+ * round-trip untouched. That is what guarantees the packages a user curated
+ * survive Siz upgrades. Individual *fields* may be dropped when a step retires
+ * the concept they belonged to — the v3→v4 step does exactly that — but such a
+ * drop must be deliberate and documented at the step.
  */
 export function migrate(raw: unknown): SizData {
   // Start from a defensive shallow copy of whatever we were given.
@@ -92,8 +94,39 @@ export function migrate(raw: unknown): SizData {
       }
       data.favorites = favorites
     }
-    delete data.packages
     data.version = 3
+  }
+
+  // The pre-v3 `packages` container is retired: the guard above re-creates it as
+  // an empty object even for a file that never had one, so drop it again rather
+  // than writing a stray `"packages": {}` back to disk.
+  delete data.packages
+
+  // --- Step: v3 -> v4 -------------------------------------------------------
+  // Favorites stop existing as a concept: every favorite moves into the
+  // `favorites` bundle so the packages the user curated stay reachable through
+  // the flat saved-entry list. Recorded as regular dependencies tracking latest
+  // — the favorite's stored version was a snapshot taken whenever it was
+  // favorited and never refreshed, so it (and its guessed category, and the rest
+  // of its per-favorite fields) is deliberately dropped rather than carried over
+  // as a pin. Never removes a package or a bundle, and an entry that already
+  // exists in the bundle wins, which makes a second run a no-op.
+  if ((data.version as number) < 4) {
+    const favorites = (
+      data.favorites && typeof data.favorites === 'object' ? data.favorites : {}
+    ) as Record<string, { name?: unknown } | undefined>
+    const names = Object.keys(favorites)
+    if (names.length > 0) {
+      const bundles = data.bundles as Record<string, Bundle>
+      const bundle = (bundles[FAVORITES_BUNDLE] ??= newBundle(FAVORITES_BUNDLE))
+      for (const key of names) {
+        const stored = favorites[key]
+        const name = typeof stored?.name === 'string' ? stored.name : key
+        bundle.packages[name] ??= { name, strategy: 'latest', depType: 'dependencies' }
+      }
+    }
+    delete data.favorites
+    data.version = 4
   }
 
   // Future migrations go here, each guarded by `if (data.version < N)`.
@@ -139,55 +172,6 @@ function withData<T>(file: string | undefined, fn: (data: SizData) => T): T {
   const result = fn(data)
   saveData(data, target)
   return result
-}
-
-export function addFavorite(
-  pkg: { name: string; version?: string; category?: string },
-  file?: string,
-): FavoritePackage {
-  return withData(file, (data) => {
-    const existing = data.favorites[pkg.name]
-    if (existing) {
-      // Refresh version/category without discarding existing metadata.
-      if (pkg.version) existing.version = pkg.version
-      if (pkg.category && !existing.category) existing.category = pkg.category
-      return existing
-    }
-    const created: FavoritePackage = {
-      ...newFavorite(pkg.name),
-      ...(pkg.version ? { version: pkg.version } : {}),
-      ...(pkg.category ? { category: pkg.category } : {}),
-    }
-    data.favorites[pkg.name] = created
-    return created
-  })
-}
-
-export function setCategory(name: string, category: string, file?: string): FavoritePackage {
-  return withData(file, (data) => {
-    const pkg = (data.favorites[name] ??= newFavorite(name))
-    pkg.category = category
-    return pkg
-  })
-}
-
-export function removeFavorite(name: string, file?: string): boolean {
-  return withData(file, (data) => {
-    if (!data.favorites[name]) return false
-    delete data.favorites[name]
-    return true
-  })
-}
-
-/** List favorited packages, sorted alphabetically by name, with optional filters. */
-export function listFavorites(
-  filters: { category?: string } = {},
-  file?: string,
-): FavoritePackage[] {
-  const data = loadData(file ?? getDataFile())
-  return Object.values(data.favorites)
-    .filter((p) => !filters.category || p.category === filters.category)
-    .toSorted((a, b) => a.name.localeCompare(b.name))
 }
 
 // --- Bundle mutators ---------------------------------------------------------

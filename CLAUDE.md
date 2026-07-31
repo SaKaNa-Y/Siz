@@ -2,7 +2,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-`siz` is a CLI for searching, favoriting and installing npm packages. It ships both as a binary (`siz`) and as a library (importable from the package root). Package manager is **pnpm** (`pnpm@10.24.0`), Node `>=20.19.0`, ESM-only TypeScript.
+`siz` is a CLI for searching, saving and installing npm packages. It ships both as a binary (`siz`) and as a library (importable from the package root). Package manager is **pnpm** (`pnpm@10.24.0`), Node `>=20.19.0`, ESM-only TypeScript.
 
 ## CLI (`siz -h`)
 
@@ -10,7 +10,7 @@ The command surface is defined entirely by the `cac` registrations in `src/cli.t
 
 ```
 siz/0.3.0
-Smarter npm package search & management CLI — search, favorite and install packages.
+Smarter npm package search & management CLI — search, save and install packages.
 
 Usage:
   $ siz [...query]
@@ -18,12 +18,12 @@ Usage:
 Commands:
   [...query]                        Search npm packages by name (use qualifiers like keyword:cli)
   search [...query]                 Full-text search including package descriptions
-  add <package> [...packages]       Install package(s) into the project (--fav to favorite, --bundle to record)
+  add <package> [...packages]       Install package(s) into the project (--bundle to record instead)
   bundle <action> [arg1] [...args]  Manage preset bundles
   upgrade [level]                   Upgrade project dependencies (level: major | minor | patch | latest)
   outdated                          Report outdated dependencies (read-only)
   list                              List saved packages across all bundles
-  rm <package> [...packages]        Uninstall package(s) from the project (--fav to unfavorite)
+  rm <package> [...packages]        Uninstall package(s) from the project
   help                              Show this help message
   version                           Show the installed version
 
@@ -42,13 +42,12 @@ Examples:
   $ siz add vitest -D
   $ siz add react@18
   $ siz rm lodash
-  $ siz add zod vitest --fav
   $ siz add react vue --bundle my-stack
   $ siz bundle install my-stack
   $ siz upgrade minor
 ```
 
-Per-command help lists the mode flags: `siz add --help` shows `--fav`, `-b/--bundle`, `-D/--dev`, `-s/--strategy`, `--no-rules`; `siz rm --help` shows `--fav`; `siz list --help` shows `-b/--bundle`.
+Per-command help lists the mode flags: `siz add --help` shows `-b/--bundle`, `-D/--dev`, `-s/--strategy`, `--no-rules`; `siz rm --help` has no mode flag; `siz list --help` shows `-b/--bundle`.
 
 **Rule:** whenever a command, option, flag, alias, or example is added, changed, or removed in `src/cli.ts`, update this help block (and the relevant per-command help) to match — `siz -h` is part of the public surface and must never drift from the code.
 
@@ -101,9 +100,9 @@ Three layers, top to bottom: **Commands** orchestrate flow → **Core** holds lo
 **Entry / routing** — `src/cli.ts` uses `cac` to register subcommands and dispatch to `src/commands/*`:
 
 - bare `siz [query]` → `commands/interactive.ts` (name search; or `commands/search.ts` for `--list` / `--json`); `search [query]` is the same flow over descriptions (full-text)
-- `add <package…>` → `commands/add.ts`; a three-way, mutually-exclusive multiplexer. **Default: installs** the package(s) into the project via the shared `commands/install-runner.ts` (`--fav` + `--bundle` together throws). `--fav` favorites instead (resolves latest, suggests a category; version part dropped). `-b/--bundle <name>` records into that bundle (an explicit `@version` pins the entry `exact`, else `-s/--strategy <latest|exact|caret|tilde>`, default `caret`; `-D/--dev` → devDependencies). `-D/--dev` also marks install-mode deps as dev; `--no-rules` bypasses the guardrail on install. Specs (`react@18`, `@scope/pkg@1.2.3`) are split by `core/pm.parseSpec()` so name-keyed logic uses the bare name while the version flows to the PM
+- `add <package…>` → `commands/add.ts`; a two-way, mutually-exclusive multiplexer. **Default: installs** the package(s) into the project via the shared `commands/install-runner.ts`. `-b/--bundle <name>` records into that bundle instead (an explicit `@version` pins the entry `exact`, else `-s/--strategy <latest|exact|caret|tilde>`, default `caret`; `-D/--dev` → devDependencies). `-D/--dev` also marks install-mode deps as dev; `--no-rules` bypasses the guardrail on install. Specs (`react@18`, `@scope/pkg@1.2.3`) are split by `core/pm.parseSpec()` so name-keyed logic uses the bare name while the version flows to the PM. Removed flags (currently just `--fav`) are caught in `commands/removed-flags.ts` before cac parses argv, so they error with the replacement flow rather than a bare "Unknown option"
 - `bundle <action> [arg1] [...args]` → `commands/bundle.ts`; cac matches on the leading token, so one command dispatches on `action`: `list`/`ls`, `install <name>`, `show <name>`, `rm <name> [...packages]` (with package names it removes exactly those entries via `core/store.removeFromBundle()` — reporting names that weren't there and leaving an empty bundle behind rather than deleting it; with none it deletes the whole bundle behind the existing confirm), `rename <old> <new>`
-- `list`/`ls` → `commands/list.ts`; prints the flat saved-entry list (`core/store.listSavedEntries()`, rendered by `ui/bundle-render.renderSavedEntryLine()`), with `-b/--bundle <name>` narrowing it to one bundle — the same data the empty-box front door opens; `rm <package…>` → `commands/remove.ts`; **default: uninstalls** the package(s) from the project (PM `remove`/`uninstall` via `core/pm.buildRemoveCommand()` — no rules, no confirm, monorepo target picker when ambiguous; orthogonal to favorites), `--fav` removes them from favorites instead
+- `list`/`ls` → `commands/list.ts`; prints the flat saved-entry list (`core/store.listSavedEntries()`, rendered by `ui/bundle-render.renderSavedEntryLine()`), with `-b/--bundle <name>` narrowing it to one bundle — the same data the empty-box front door opens; `rm <package…>` → `commands/remove.ts`; **uninstalls** the package(s) from the project (PM `remove`/`uninstall` via `core/pm.buildRemoveCommand()` — no rules, no confirm, monorepo target picker when ambiguous). There is no mode flag: curating saved packages is `siz bundle rm`
 - `upgrade [level]` / `up` (alias) → `commands/upgrade.ts`; `level` is `major | minor | patch | latest` (validated in `cli.ts`, defaults to `latest`); `-r/--recursive` discovers every `package.json` under cwd (monorepo mode); `--dry-run` previews without writing or installing
 - `outdated` → `commands/outdated.ts`; the read-only, non-interactive sibling of `upgrade` — reports Current/Wanted/Latest and **never writes or installs**. `-r/--recursive` (workspace-aware) and pnpm catalogs (always on) mirror `upgrade`'s scope; `--json` emits `{ outdated, skipped, summary }` to stdout for CI; `--exit-code` exits non-zero when anything is outdated (default exit `0`). `runOutdated()` returns the exit code, which `cli.ts` assigns to `process.exitCode`
 - `help`, `version` — thin subcommands that reuse cac's built-in `outputHelp()` / `outputVersion()`; the version is sourced from `package.json` (imported), which also backs the `--version` flag
@@ -118,7 +117,7 @@ Three layers, top to bottom: **Commands** orchestrate flow → **Core** holds lo
 
 - `registry.ts` — npm registry search + name/description filtering (fzf) + qualifier handling
 - `query.ts` — parses qualifiers: `keyword:`, `author:`, `scope:`, `category:`, `tag:` (`tag:`/`tags:` is an alias of `keyword:` — folded into npm's native `keywords:` search)
-- `store.ts` — JSON persistence in the user config dir, non-destructive migrations (schema v3: a single `favorites` map, no two-tier track/favorite), favorite mutators (`addFavorite`, `removeFavorite`, `listFavorites`, `setCategory`), bundle mutators, and the flat saved-entry query `listSavedEntries({ bundle? })` — every bundle entry across all bundles tagged with the bundle it came from, ordered by bundle then package name; one query backs both `siz list` and the empty-box front door. `removeFromBundle()` reports `{ removed, missing }` and leaves an empty bundle rather than deleting it
+- `store.ts` — JSON persistence in the user config dir, non-destructive migrations (schema v4: bundles are the only saved-package store; the v3 `favorites` map migrates into the `FAVORITES_BUNDLE` bundle as `latest`-tracking dependencies, dropping the stale version snapshot and the guessed category), bundle mutators, and the flat saved-entry query `listSavedEntries({ bundle? })` — every bundle entry across all bundles tagged with the bundle it came from, ordered by bundle then package name; one query backs both `siz list` and the empty-box front door. `removeFromBundle()` reports `{ removed, missing }` and leaves an empty bundle rather than deleting it
 - `categories.ts` — heuristic categorization (Frontend, Backend, Testing, …) from name/description/keywords
 - `pm.ts` — detect npm/pnpm/yarn/bun/deno and build install commands (incl. dev deps), the uninstall command (`buildRemoveCommand`, via `resolveCommand(agent, 'uninstall', …)`), and the sync/install command (`buildSyncCommand`, `runInstall`) used by upgrade; `parseSpec()` splits a `pkg@version` spec (scope-aware) into name + version; uses `package-manager-detector`
 - `meta.ts` — fast version resolution via `fast-npm-meta`
@@ -132,11 +131,11 @@ Three layers, top to bottom: **Commands** orchestrate flow → **Core** holds lo
 - `catalog.ts` — locate the nearest `pnpm-workspace.yaml` (`discoverCatalog`), parse its `catalog:` / `catalogs:` blocks into `CatalogEntry[]` (via the `yaml` parser), and rewrite catalog versions in place with indentation-scoped, format-preserving string edits (`applyCatalogEdits`); `readWorkspacePackages()` exposes the file's `packages:` globs for manifest discovery
 - `rules.ts` — project-local dependency guardrail. Reads `siz.config.json` (nearest via `findUp`, JSON, `{ rules: { allow, deny } }`) with `loadRules()` (throws on malformed JSON — fail-closed; `undefined` when absent). Pure, reusable evaluation core (for a future `siz check` audit): `evaluateRule()` / `partitionByRules()` apply `permitted = (allow empty OR matches allow) AND NOT matches deny` (deny wins); `globToRegExp()`/`matchesPattern()` do flat-string name globbing (`*` = any chars, slash-agnostic). Enforced at the three install paths only (interactive **Install**, direct `siz add`, and `bundle install`); `--no-rules` bypasses. Uninstall (`siz rm`) is not gated
 - `paths.ts` — config dir resolution (Windows `%APPDATA%\siz`, Unix `~/.config/siz`)
-- `types.ts` — shared interfaces: `FavoritePackage`, `SizData`, `SearchResult`
+- `types.ts` — shared interfaces: `Bundle`, `BundlePackage`, `SavedEntry`, `SizData`, `SearchResult`
 
-**UI** (`src/ui/`): `render.ts` (score bars, category labels, result/favorite cards, `formatBlockedNotice` for rule-blocked packages; one `*Inline`/`*Detail` formatter pair per result-signal family — `trustGlyphs`/`trustDetail`, `sizeInline`/`sizeDetail`, `licenseInline`/`licenseDetail` — plus `signalLegend()` covering all three families' glyphs), `search-prompt.ts` (type-as-you-search multiselect), `prompts.ts` (`@clack/prompts` confirm/action menus, package-manager picker), `upgrade-render.ts` (upgrade summary line, version deltas, option labels; exports `colorForDiff`), `outdated-render.ts` (aligned Current/Wanted/Latest table + summary line, reusing `colorForDiff`), `highlight.ts` (keyword highlighting). Color via `ansis`.
+**UI** (`src/ui/`): `render.ts` (score bars, category labels, result cards, `formatBlockedNotice` for rule-blocked packages; one `*Inline`/`*Detail` formatter pair per result-signal family — `trustGlyphs`/`trustDetail`, `sizeInline`/`sizeDetail`, `licenseInline`/`licenseDetail` — plus `signalLegend()` covering all three families' glyphs), `search-prompt.ts` (type-as-you-search multiselect), `prompts.ts` (`@clack/prompts` confirm/action menus, package-manager picker), `upgrade-render.ts` (upgrade summary line, version deltas, option labels; exports `colorForDiff`), `outdated-render.ts` (aligned Current/Wanted/Latest table + summary line, reusing `colorForDiff`), `highlight.ts` (keyword highlighting). Color via `ansis`.
 
-**Library surface** — `src/index.ts` re-exports core functions (`searchPackages`, `addFavorite`, `detectPM`, `buildInstallCommand`, `buildRemoveCommand`, `parseSpec`, `listFavorites`, the `project.ts`/`upgrade.ts`/`catalog.ts` upgrade functions and types, the `outdated.ts` report functions and types, the `size.ts`/`license.ts`/`packument.ts` result-signal functions, …). Keep it in sync when core signatures change.
+**Library surface** — `src/index.ts` re-exports core functions (`searchPackages`, `detectPM`, `buildInstallCommand`, `buildRemoveCommand`, `parseSpec`, `listSavedEntries`, the `project.ts`/`upgrade.ts`/`catalog.ts` upgrade functions and types, the `outdated.ts` report functions and types, the `size.ts`/`license.ts`/`packument.ts` result-signal functions, …). Keep it in sync when core signatures change.
 
 **Data store** — persisted to `data.json` in the config dir (`%APPDATA%\siz\data.json` on Windows, `~/.config/siz/data.json` on Unix). Tests under `test/*.test.ts` mirror the core modules.
 

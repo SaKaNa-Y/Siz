@@ -8,5 +8,3 @@ Bundles now hold everything you've saved, and single entries can be removed.
 - `siz list` prints that same flat list for scripting, showing each entry's version range, dependency type, and bundle. `-b/--bundle <name>` narrows it to one bundle; `-c/--category` is gone.
 - `siz bundle rm <bundle> <pkg...>` removes exactly those entries from a bundle. A name that isn't in the bundle is reported and the rest still go; removing the last entry leaves an empty bundle. `siz bundle rm <bundle>` with no package names still deletes the whole bundle behind the existing confirmation.
 - Library surface: new `listSavedEntries()` and `SavedEntry`; `removeFromBundle()` now returns `{ bundle, removed, missing }` instead of the bundle.
-
-Favorites are untouched and keep working (`siz add --fav`, `siz rm --fav`, the **Favorite** action), but they no longer back `siz list` or the front door.

@@ -1,19 +1,5 @@
 import type { Agent } from 'package-manager-detector'
 
-/** A package the user has favorited in Siz. */
-export interface FavoritePackage {
-  /** npm package name, e.g. "lodash" or "@vue/reactivity". */
-  name: string
-  /** ISO timestamp of when it was first favorited. */
-  addedAt: string
-  /** Optional category (see core/categories.ts). */
-  category?: string
-  /** Optional free-form note. */
-  note?: string
-  /** Last resolved version, cached for display (optional). */
-  version?: string
-}
-
 /** How a bundle package's version range is written at install time. */
 export type VersionStrategy = 'latest' | 'exact' | 'caret' | 'tilde'
 
@@ -70,8 +56,6 @@ export interface SizData {
   $schema?: string
   /** Schema version for non-destructive migrations. */
   version: number
-  /** Favorited packages keyed by package name. */
-  favorites: Record<string, FavoritePackage>
   /** Saved bundles keyed by bundle name. */
   bundles: Record<string, Bundle>
   /** User settings (reserved for future use). */

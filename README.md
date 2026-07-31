@@ -5,9 +5,9 @@
 > [!IMPORTANT] 
 > Refactoring may be performed from time to time.
 
-Siz is a command-line tool for discovering, installing, and organizing npm packages. Open a live search box, multi-select what you need, then install it with your package manager of choice — or favorite packages for later. Everything you organize is stored locally and stays safe across upgrades.
+Siz is a command-line tool for discovering, installing, and organizing npm packages. Open a live search box, multi-select what you need, then install it with your package manager of choice — or save it into a bundle for later. Everything you organize is stored locally and stays safe across upgrades.
 
-Inspired by [`@rizumu/nai`](https://github.com/LittleSound/nai): Siz keeps nai's interactive search-and-install flow, and adds a discovery and organization layer (favorites and categories) around it. It also borrows ideas from antfu's [`ni`](https://github.com/antfu-collective/ni) (package-manager detection and a unified install experience) and [`taze`](https://github.com/antfu-collective/taze) (ceiling-based dependency upgrades).
+Inspired by [`@rizumu/nai`](https://github.com/LittleSound/nai): Siz keeps nai's interactive search-and-install flow, and adds a discovery and organization layer (bundles of saved packages) around it. It also borrows ideas from antfu's [`ni`](https://github.com/antfu-collective/ni) (package-manager detection and a unified install experience) and [`taze`](https://github.com/antfu-collective/taze) (ceiling-based dependency upgrades).
 
 ## Features
 
@@ -37,13 +37,11 @@ Siz is a unified package-management workflow layer: an interactive interface ove
 
 ### Organize
 
-- [x] Favorites — a lightweight curated shortlist of packages you reach for
-- [x] Heuristic auto-categorization when you favorite a package
 - [x] Bundles — named recipes that record versions, dep types, and preferred PM, installable together in one step
 - [x] Peer/optional bundle install — a bundle's peer/optional deps install as their true type via the manager's save flag (npm / pnpm / yarn / bun; deno falls back to a regular dependency)
 - [x] Bundles as the saved-package store — the empty search box lists every saved entry across all bundles, each tagged with its bundle, and `siz list` prints the same flat list for scripting (`-b` narrows it to one bundle)
 - [x] Per-entry bundle removal — `siz bundle rm <bundle> <pkg...>` removes those entries; with no package names it still deletes the bundle
-- [ ] **Next** — Favorites removed as a separate concept — existing favorites migrate into a bundle (non-destructive schema migration) rather than being discarded
+- [x] Bundles are the only place packages are saved — favorites are gone, and existing favorites migrated into a `favorites` bundle (non-destructive schema v4 migration) rather than being discarded
 - [ ] **Later** — Export / import bundles — shareable JSON, the concrete basis for team-shared presets
 - [ ] **Later** — Local search and install history
 - [ ] **Maybe** — Seed a bundle from the current project — snapshot the current `package.json` deps into a named bundle
@@ -54,8 +52,8 @@ Siz is a unified package-management workflow layer: an interactive interface ove
 **Install & run**
 
 - [x] Install via your package manager (npm / pnpm / yarn / bun / deno) — pick it at install time, with a per-package dependency vs devDependency toggle
-- [x] Direct project install / uninstall by name — `siz add <pkg>` installs, `siz rm <pkg>` uninstalls; favoriting moves to `--fav`
-- [ ] **Next** — `siz add` narrows to two modes (install / `--bundle`) and `siz rm` becomes uninstall-only, as `--fav` retires with favorites
+- [x] Direct project install / uninstall by name — `siz add <pkg>` installs, `siz rm <pkg>` uninstalls
+- [x] `siz add` has exactly two modes (install / `--bundle`) and `siz rm` is uninstall-only — `--fav` retired with favorites and now errors with the replacement flow
 - [ ] **Next** — Non-interactive mode — `--yes` on every mutating command, for CI and scripts; `--json` / `--list` without a query will exit non-zero instead of opening the interactive box
 - [ ] **Later** — Interactive uninstall picker — `siz rm` with no args opens a picker over installed deps, making removal as interactive as install
 - [ ] **Later** — Run scripts — `siz run <script>` through the detected package manager
@@ -120,9 +118,6 @@ siz add react@18          # a specific version
 # Uninstall
 siz rm lodash
 
-# Favorite packages you reach for (--fav)
-siz add zod vitest --fav
-
 # Group packages into a reusable bundle, then install it anywhere
 siz add react vue --bundle my-stack
 siz bundle install my-stack
@@ -166,7 +161,6 @@ Inside the box:
 After you confirm a selection, Siz shows an action menu for the chosen packages:
 
 - **Install** — detects your package manager (npm / pnpm / yarn / bun / deno via [`package-manager-detector`](https://github.com/antfu-collective/package-manager-detector), part of the [`ni`](https://github.com/antfu-collective/ni) project) and lets you confirm or switch it at install time. Each package carries a `[dep]` / `[dev]` badge you flip with `Ctrl+T` in the search box; mixed selections run as separate `add` / `add -D` commands. Siz shows the exact command(s) for confirmation, then runs them. In a monorepo — when more than one `package.json` is found under the current directory (skipping `node_modules`, `dist`, and `.git`) — Siz first asks **which package to install into** and runs the package manager in that package's directory, so the dependency lands in the right workspace. With a single `package.json`, there's no extra prompt.
-- **Favorite** — add the packages to your favorites list.
 - **Add to bundle** — save the selection to a reusable bundle.
 
 Pressing **Enter** on an empty box (nothing typed) opens your **saved packages** instead — every entry across all your bundles in one flat list, each row tagged with the bundle it came from. That's the front door: select any and run the same action menu. Each entry carries the dependency type it was saved as, so a `[dev]` entry installs as a devDependency without any extra toggling.
@@ -307,9 +301,9 @@ siz rm lodash left-pad      # uninstall (multiple at once)
 
 In a **monorepo** — when more than one `package.json` is found under the current directory — siz first asks **which package to install into** (or remove from) and runs the manager in that workspace's directory. With a single `package.json`, there's no extra prompt; with none, the manager runs in the current directory (creating one as it normally would).
 
-Installs honor the [dependency rules](#dependency-rules) guardrail: a denied package is dropped with a notice, and if every package is blocked the command aborts non-zero. Pass `--no-rules` to bypass. Uninstall is never gated — removing a package can't violate a policy about what may enter the project — and it's orthogonal to favorites: `siz rm react` uninstalls but leaves the favorite; `siz rm react --fav` removes the favorite without uninstalling.
+Installs honor the [dependency rules](#dependency-rules) guardrail: a denied package is dropped with a notice, and if every package is blocked the command aborts non-zero. Pass `--no-rules` to bypass. Uninstall is never gated — removing a package can't violate a policy about what may enter the project — and it's orthogonal to what you've saved: `siz rm react` uninstalls but leaves any bundle entry alone; use `siz bundle rm <bundle> react` to drop the saved entry without uninstalling.
 
-`siz add` has three mutually exclusive modes — plain (install), `--fav` (favorite, see [Favorites](#favorites)), and `--bundle <name>` (record into a bundle, see [Bundles](#bundles)).
+`siz add` has two mutually exclusive modes — plain (install) and `--bundle <name>` (record into a bundle, see [Bundles](#bundles)). The retired `--fav` flag errors with the flow that replaced it.
 
 ## Bundles
 
@@ -323,7 +317,7 @@ siz add react react-dom --bundle my-stack
 siz add vitest --bundle my-stack -D     # -D / --dev records it as a devDependency
 ```
 
-Without `--bundle` or `--fav`, `siz add` installs the packages into the current project instead (see [Install & uninstall](#install--uninstall)).
+Without `--bundle`, `siz add` installs the packages into the current project instead (see [Install & uninstall](#install--uninstall)).
 
 Then manage and install bundles:
 
@@ -338,7 +332,7 @@ siz bundle rm my-stack          # delete the whole bundle (after confirmation)
 
 `siz bundle rm` with trailing package names removes exactly those entries and leaves the rest of the bundle intact — a name that isn't in the bundle is reported and the rest still go. Removing the last entry leaves an empty bundle rather than deleting it; only the no-package-names form deletes a bundle, and that still asks for confirmation. Removing a saved entry never touches your project — use `siz rm <pkg>` to uninstall.
 
-`siz bundle install` resolves each package's **latest** version fresh from npm (never snapshotted), applies its recorded version strategy (caret `^` / tilde `~` / exact / `latest`), lets you multi-select which to install, and prompts for a package manager. Each dependency type installs as its own command with the manager's save flag — regular, dev (`-D`), peer (`--save-peer` / `--peer`), and optional (`--save-optional` / `--optional`) — so packages land in the right `package.json` bucket. Deno, which has no peer/optional concept, installs those as regular dependencies (with a notice). Bundles are saved in the local data store and migrate non-destructively (schema v2).
+`siz bundle install` resolves each package's **latest** version fresh from npm (never snapshotted), applies its recorded version strategy (caret `^` / tilde `~` / exact / `latest`), lets you multi-select which to install, and prompts for a package manager. Each dependency type installs as its own command with the manager's save flag — regular, dev (`-D`), peer (`--save-peer` / `--peer`), and optional (`--save-optional` / `--optional`) — so packages land in the right `package.json` bucket. Deno, which has no peer/optional concept, installs those as regular dependencies (with a notice). Bundles are saved in the local data store and migrate non-destructively (schema v4 — favorites from earlier versions were moved into a `favorites` bundle).
 
 ## Commands
 
@@ -347,9 +341,8 @@ siz bundle rm my-stack          # delete the whole bundle (after confirmation)
 | `siz` / `siz <query>`                                 | Open the live search box, searching by name                                |
 | `siz search <query>`                                  | Full-text search, including package descriptions                           |
 | `siz add <pkg...>`                                    | Install package(s) into the project (`-D` / `--dev` for devDependencies, `--no-rules` to bypass rules) |
-| `siz add <pkg...> --fav`                              | Favorite package(s) instead of installing; resolves version, suggests a category |
 | `siz add <pkg...> --bundle <name>`                    | Record packages into a bundle instead of installing (`-D` / `--dev` for devDependencies) |
-| `siz rm <pkg...>`                                     | Uninstall package(s) from the project (`--fav` to remove a favorite instead) |
+| `siz rm <pkg...>`                                     | Uninstall package(s) from the project                                      |
 | `siz bundle <list \| install \| show \| rm \| rename>` | Manage preset bundles (e.g. `siz bundle install my-stack`; `siz bundle rm <name> <pkg...>` drops single entries) |
 | `siz upgrade [level]` / `siz up`                      | Upgrade this project's dependencies (`major` \| `minor` \| `patch` \| `latest`) |
 | `siz outdated`                                        | Read-only report of outdated dependencies (`--json` for CI, `--exit-code` to gate) |
@@ -366,15 +359,13 @@ siz list -b my-stack      # just one bundle
 
 ### Categories
 
-Siz ships with a starter set of categories and auto-suggests one when you favorite a package, based on its name, description, and keywords:
+Siz ships with a starter set of categories and labels each search result with a guess, based on its name, description, and keywords:
 
 `Frontend` · `Backend` · `Build Tools` · `Testing` · `Database` · `State Management` · `UI` · `DevTools` · `CLI Tools`
 
-### Favorites
+### Saved packages
 
-Favorite the packages you reach for often with `siz add <pkg> --fav`, or with the **Favorite** action after a search. Remove one with `siz rm <pkg> --fav`. Favorites are name-only, so a version in the spec (`siz add react@18 --fav`) is ignored.
-
-Bundles are now the saved-package store: the front door and `siz list` both show saved bundle entries, not favorites. Favoriting still works and your favorites are still stored, but they'll migrate into a bundle when the concept retires (see [Features](#features)) — save into a bundle instead for anything new.
+Bundles are the only place packages are saved: the front door (Enter on an empty search box) and `siz list` both show saved bundle entries. Favorites were removed — if you had any, they were migrated into a bundle named `favorites` on first run, so `siz list -b favorites` shows them. `siz add --fav` and `siz rm --fav` now error with the flow that replaced them: save with `siz add <pkg> --bundle <name>`, remove with `siz bundle rm <name> <pkg>`.
 
 ## Library usage
 

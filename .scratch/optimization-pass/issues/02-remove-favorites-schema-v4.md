@@ -10,21 +10,21 @@ Parent spec: `.scratch/optimization-pass/PRD.md`.
 
 **Blocked by:** 01 — Bundles become the saved-package store.
 
-**Status:** ready-for-agent
+**Status:** completed
 
-- [ ] Store schema advances to v4 with a guarded migration step following the existing chain
-- [ ] Every favorite present in a v3 store appears as an entry in a bundle after migration, recorded as a regular dependency tracking latest
-- [ ] The migration drops the favorite's stored version snapshot and its category
-- [ ] The migration is idempotent — running it twice produces the same result and never removes a package or a bundle
-- [ ] A v3 store with no favorites, and a store already at v4, both migrate without error
-- [ ] Pre-existing bundles are unaffected by the migration
-- [ ] `siz add --fav` errors with a message naming the replacement flow; same for `siz rm --fav`
-- [ ] `siz add` supports exactly two modes: default install and `--bundle <name>`
-- [ ] `siz rm <pkg>` always builds an uninstall command, with no favorites branch
-- [ ] The interactive action menu offers Install and Add to bundle only
-- [ ] The favorites mutators and query are removed from the store and from the library surface
-- [ ] Store tests cover v4 migration from a raw v3 object (entries preserved, version and category dropped, bundles untouched), idempotency, and the no-favorites case
-- [ ] Command dispatch tests cover `siz add`'s two modes, the removed-flag errors, and `siz rm` always uninstalling; favorites-specific cases are deleted
-- [ ] The `siz -h` block and per-command help in the project instructions no longer mention `--fav`
-- [ ] A changeset is authored at `minor` calling out the removed flags and the migration
-- [ ] `pnpm test`, `pnpm typecheck` and `pnpm lint` pass (leave `pnpm format` alone)
+- [x] Store schema advances to v4 with a guarded migration step following the existing chain
+- [x] Every favorite present in a v3 store appears as an entry in a bundle after migration, recorded as a regular dependency tracking latest
+- [x] The migration drops the favorite's stored version snapshot and its category
+- [x] The migration is idempotent — running it twice produces the same result and never removes a package or a bundle
+- [x] A v3 store with no favorites, and a store already at v4, both migrate without error
+- [x] Pre-existing bundles are unaffected by the migration
+- [x] `siz add --fav` errors with a message naming the replacement flow; same for `siz rm --fav`
+- [x] `siz add` supports exactly two modes: default install and `--bundle <name>`
+- [x] `siz rm <pkg>` always builds an uninstall command, with no favorites branch
+- [x] The interactive action menu offers Install and Add to bundle only
+- [x] The favorites mutators and query are removed from the store and from the library surface
+- [x] Store tests cover v4 migration from a raw v3 object (entries preserved, version and category dropped, bundles untouched), idempotency, and the no-favorites case
+- [x] Command dispatch tests cover `siz add`'s two modes, the removed-flag errors, and `siz rm` always uninstalling; favorites-specific cases are deleted
+- [x] The `siz -h` block and per-command help in the project instructions no longer mention `--fav`
+- [x] A changeset is authored at `minor` calling out the removed flags and the migration
+- [x] `pnpm test`, `pnpm typecheck` and `pnpm lint` pass (leave `pnpm format` alone)

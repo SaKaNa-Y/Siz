@@ -19,6 +19,7 @@ import { runInteractive } from './commands/interactive.ts'
 import { runList } from './commands/list.ts'
 import { runOutdated } from './commands/outdated.ts'
 import { runRemove } from './commands/remove.ts'
+import { assertNoRemovedFlags } from './commands/removed-flags.ts'
 import { runSearchPrint } from './commands/search.ts'
 import { runUpgrade } from './commands/upgrade.ts'
 
@@ -63,9 +64,8 @@ const ADD_STRATEGIES = ['latest', 'exact', 'caret', 'tilde'] as const
 cli
   .command(
     'add <package> [...packages]',
-    'Install package(s) into the project (--fav to favorite, --bundle to record)',
+    'Install package(s) into the project (--bundle to record instead)',
   )
-  .option('--fav', 'Favorite the package(s) instead of installing')
   .option('-b, --bundle <name>', 'Record packages into a named bundle instead of installing')
   .option('-D, --dev', 'Install / record as devDependencies')
   .option(
@@ -78,7 +78,7 @@ cli
     async (
       pkg: string,
       packages: string[],
-      opts: { fav?: boolean; bundle?: string; dev?: boolean; strategy?: string; rules?: boolean },
+      opts: { bundle?: string; dev?: boolean; strategy?: string; rules?: boolean },
     ) => {
       const strategy = (opts.strategy ?? 'caret') as VersionStrategy
       if (!ADD_STRATEGIES.includes(strategy)) {
@@ -87,7 +87,6 @@ cli
         )
       }
       await runAdd([pkg, ...packages], {
-        fav: opts.fav,
         bundle: opts.bundle,
         dev: opts.dev,
         strategy,
@@ -175,14 +174,8 @@ cli
   })
 
 cli
-  .command(
-    'rm <package> [...packages]',
-    'Uninstall package(s) from the project (--fav to unfavorite)',
-  )
-  .option('--fav', 'Remove the package(s) from favorites instead of uninstalling')
-  .action((pkg: string, packages: string[], opts: { fav?: boolean }) =>
-    runRemove([pkg, ...packages], { fav: opts.fav }),
-  )
+  .command('rm <package> [...packages]', 'Uninstall package(s) from the project')
+  .action((pkg: string, packages: string[]) => runRemove([pkg, ...packages]))
 
 // Render the full program help (the default command's), not the `help` command's own usage.
 cli.command('help', 'Show this help message').action(() => defaultCommand.outputHelp())
@@ -195,7 +188,6 @@ const EXAMPLES = [
   'siz add vitest -D',
   'siz add react@18',
   'siz rm lodash',
-  'siz add zod vitest --fav',
   'siz add react vue --bundle my-stack',
   'siz bundle install my-stack',
   'siz upgrade minor',
@@ -218,6 +210,9 @@ cli.outputVersion = () => console.log(packageJson.version)
 
 async function main() {
   try {
+    // Removed flags are caught before parsing: cac would reject them with a bare
+    // "Unknown option", which says nothing about what replaced them.
+    assertNoRemovedFlags(process.argv.slice(2))
     cli.parse(process.argv, { run: false })
     await cli.runMatchedCommand()
   } catch (err) {
