@@ -1,11 +1,6 @@
 import ansis from 'ansis'
 
-import type {
-  LicenseSignals,
-  SearchResult,
-  SizeSignals,
-  TrustSignals,
-} from '../core/types.ts'
+import type { LicenseSignals, SearchResult, SizeSignals, TrustSignals } from '../core/types.ts'
 
 import { suggestCategory } from '../core/categories.ts'
 import { formatLicense, isUnclearLicense, truncateLicense } from '../core/license.ts'
