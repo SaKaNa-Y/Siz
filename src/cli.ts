@@ -2,7 +2,6 @@
 import ansis from 'ansis'
 import { cac } from 'cac'
 
-import type { SearchMode } from './core/registry.ts'
 import type { VersionStrategy } from './core/types.ts'
 import type { UpgradeMode } from './core/upgrade.ts'
 
@@ -25,39 +24,50 @@ import { runUpgrade } from './commands/upgrade.ts'
 
 const cli = cac('siz')
 
-/** Shared handler for the name (`siz`) and full-text (`siz search`) commands. */
-function searchAction(mode: SearchMode) {
-  return async (
+/** Shared handler for `siz [query]` and its `siz search` alias. */
+const searchAction =
+  ({ deprecated = false } = {}) =>
+  async (
     query: string[],
     opts: { size: number; json?: boolean; list?: boolean; rules?: boolean },
   ) => {
+    // Warn on stderr, so `--json` piped to a script stays clean.
+    if (deprecated) {
+      console.error(ansis.yellow('siz search is deprecated — `siz <query>` now does the same.'))
+    }
     const q = query.join(' ').trim()
-    // Non-interactive paths require a query.
-    if ((opts.json || opts.list) && q) {
-      await runSearchPrint(q, { size: Number(opts.size), json: opts.json, mode })
+    if (opts.json || opts.list) {
+      // A script whose query variable came out empty must never get a TUI.
+      if (!q) {
+        throw new Error('a query is required with --json / --list. Example: siz zod --json')
+      }
+      await runSearchPrint(q, { size: Number(opts.size), json: opts.json })
       return
     }
     // Interactive: bare `siz` opens the search box; `siz <query>` seeds it.
     // cac exposes `--no-rules` as `rules === false`.
-    await runInteractive(q || undefined, mode, { noRules: opts.rules === false })
+    await runInteractive(q || undefined, { noRules: opts.rules === false })
   }
+
+/** Register the search command's options + handler (shared by `siz` and its alias). */
+function registerSearch(usage: string, description: string, opts: { deprecated?: boolean } = {}) {
+  return cli
+    .command(usage, description)
+    .option('-n, --size <n>', 'Number of results to fetch', { default: 20 })
+    .option('--json', 'Output raw JSON results (requires a query)')
+    .option('--list', 'Print results without the interactive box (requires a query)')
+    .option('--no-rules', 'Bypass dependency rules in siz.config.json when installing')
+    .action(searchAction({ deprecated: opts.deprecated }))
 }
 
-const defaultCommand = cli
-  .command('[...query]', 'Search npm packages by name (use qualifiers like keyword:cli)')
-  .option('-n, --size <n>', 'Number of results to fetch', { default: 20 })
-  .option('--json', 'Output raw JSON results (requires a query)')
-  .option('--list', 'Print results without the interactive box (requires a query)')
-  .option('--no-rules', 'Bypass dependency rules in siz.config.json when installing')
-  .action(searchAction('name'))
+const defaultCommand = registerSearch(
+  '[...query]',
+  'Search npm packages (use qualifiers like keyword:cli)',
+)
 
-cli
-  .command('search [...query]', 'Full-text search including package descriptions')
-  .option('-n, --size <n>', 'Number of results to fetch', { default: 20 })
-  .option('--json', 'Output raw JSON results (requires a query)')
-  .option('--list', 'Print results without the interactive box (requires a query)')
-  .option('--no-rules', 'Bypass dependency rules in siz.config.json when installing')
-  .action(searchAction('description'))
+// `siz search` folded into `siz`; kept as a hidden alias (see HIDDEN_COMMANDS)
+// for one minor release so the documented command doesn't break without warning.
+registerSearch('search [...query]', 'Alias of `siz [query]` (deprecated)', { deprecated: true })
 
 const ADD_STRATEGIES = ['latest', 'exact', 'caret', 'tilde'] as const
 
@@ -181,9 +191,12 @@ cli
 cli.command('help', 'Show this help message').action(() => defaultCommand.outputHelp())
 cli.command('version', 'Show the installed version').action(() => cli.outputVersion())
 
+// Commands that still work but are no longer advertised in `siz -h`.
+const HIDDEN_COMMANDS = new Set(['search'])
+
 const EXAMPLES = [
   'siz react form validation',
-  'siz search "state management" --list',
+  'siz "state management" --list',
   'siz add zod',
   'siz add vitest -D',
   'siz add react@18',
@@ -201,6 +214,18 @@ cli.help((sections) => {
   if (trimmed.some((s) => s.title === 'Commands')) {
     trimmed[0] = { ...trimmed[0], body: `${trimmed[0].body}\n${packageJson.description}` }
     trimmed.push({ title: 'Examples', body: EXAMPLES.map((e) => `  $ ${e}`).join('\n') })
+    // Drop hidden commands from the listing; cac renders one padded line each.
+    return trimmed.map((section) =>
+      section.title === 'Commands'
+        ? {
+            ...section,
+            body: section
+              .body!.split('\n')
+              .filter((line) => !HIDDEN_COMMANDS.has(line.trim().split(/\s/)[0]))
+              .join('\n'),
+          }
+        : section,
+    )
   }
   return trimmed
 })

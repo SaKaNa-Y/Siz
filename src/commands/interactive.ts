@@ -12,7 +12,7 @@ import type {
 } from '../core/types.ts'
 
 import { fetchLicenses } from '../core/license.ts'
-import { type SearchMode, searchPackages } from '../core/registry.ts'
+import { searchPackages } from '../core/registry.ts'
 import { fetchBundleSize, fetchInstallSizes } from '../core/size.ts'
 import { addToBundle, listSavedEntries } from '../core/store.ts'
 import { fetchDownloadTrend, fetchTrustSignals } from '../core/trust.ts'
@@ -51,13 +51,12 @@ type BoxResult =
   | { kind: 'empty' }
   | { kind: 'selected'; selections: Selection[] }
 
-/** Build the per-result option label/hint, depending on the search mode. */
-function toSearchOption(pkg: SearchResult, input: string, mode: SearchMode): SearchOption {
+/** Build the per-result option label/hint. */
+function toSearchOption(pkg: SearchResult, input: string): SearchOption {
   const label = `${highlightKeywords(pkg.name, input)} ${ansis.blue(`v${pkg.version}`)}`
 
-  // Descriptions are shown (and matched) only in description mode.
   let hint: string | undefined
-  if (mode === 'description' && pkg.description) {
+  if (pkg.description) {
     const desc =
       pkg.description.length > 60 ? `${pkg.description.slice(0, 57)}...` : pkg.description
     hint = highlightKeywords(desc, input)
@@ -67,16 +66,14 @@ function toSearchOption(pkg: SearchResult, input: string, mode: SearchMode): Sea
 }
 
 /** Open the live, type-as-you-search multiselect box. */
-async function openSearchBox(seedQuery: string | undefined, mode: SearchMode): Promise<BoxResult> {
+async function openSearchBox(seedQuery: string | undefined): Promise<BoxResult> {
   let searchResults: SearchOption[] = []
   let lastSearchTerm = ''
   let debounceTimer: ReturnType<typeof setTimeout> | null = null
   const searchLoading = { value: false }
 
   const placeholder =
-    mode === 'description'
-      ? 'full-text search · try keyword:cli or author:name'
-      : 'search by name · try keyword:cli · Enter (empty) to browse saved packages'
+    'search npm · try keyword:cli or author:name · Enter (empty) to browse saved packages'
 
   // Per-package dependency type, populated by Ctrl+T inside the prompt.
   const depTypes = new Map<string, boolean>()
@@ -99,7 +96,7 @@ async function openSearchBox(seedQuery: string | undefined, mode: SearchMode): P
   const now = Date.now()
 
   const selected = await searchPrompt({
-    message: mode === 'description' ? 'Search npm (descriptions)' : 'Search npm packages',
+    message: 'Search npm packages',
     placeholder,
     initialInput: seedQuery,
     footer: signalLegend(),
@@ -170,14 +167,14 @@ async function openSearchBox(seedQuery: string | undefined, mode: SearchMode): P
           searchLoading.value = true
           process.stdin.emit('keypress', '', { name: '' })
           try {
-            const results = await searchPackages(input, { mode })
+            const results = await searchPackages(input)
             if (lastSearchTerm !== input) return
 
             for (const pkg of results) versionCache.set(pkg.name, pkg.version)
             const exactMatch = results.find((pkg) => pkg.name === input)
             searchResults = results
               .filter((pkg) => pkg.name !== input)
-              .map((pkg) => toSearchOption(pkg, input, mode))
+              .map((pkg) => toSearchOption(pkg, input))
 
             const updatedOpts: SearchOption[] = []
             if (isPackageName) {
@@ -348,11 +345,10 @@ async function runBrowseSaved(opts: { noRules?: boolean } = {}): Promise<void> {
 /** Entry point for bare `siz` (and `siz <query>` which seeds the box). */
 export async function runInteractive(
   seedQuery?: string,
-  mode: SearchMode = 'name',
   opts: { noRules?: boolean } = {},
 ): Promise<void> {
   clack.intro(ansis.bold.cyan('siz'))
-  const result = await openSearchBox(seedQuery, mode)
+  const result = await openSearchBox(seedQuery)
   switch (result.kind) {
     case 'cancel':
       clack.cancel('Cancelled.')

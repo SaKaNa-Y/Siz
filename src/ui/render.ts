@@ -99,28 +99,20 @@ export function licenseDetail(license: LicenseSignals): string {
 export function renderSearchResult(
   r: SearchResult,
   state: {
-    showDescription?: boolean
     signals?: TrustSignals
     size?: SizeSignals
     license?: LicenseSignals
     now?: number
   } = {},
 ): string {
-  const { showDescription = true } = state
-
   const header = `${ansis.bold.cyan(r.name)} ${ansis.dim(`v${r.version}`)}`
-  const desc = !showDescription
-    ? ''
-    : r.description
-      ? `  ${r.description}`
-      : `  ${ansis.dim('(no description)')}`
-  const keywords =
-    showDescription && r.keywords.length
-      ? `  ${ansis.dim('keywords:')} ${r.keywords
-          .slice(0, 8)
-          .map((k) => ansis.yellow(k))
-          .join(', ')}`
-      : ''
+  const desc = r.description ? `  ${r.description}` : `  ${ansis.dim('(no description)')}`
+  const keywords = r.keywords.length
+    ? `  ${ansis.dim('keywords:')} ${r.keywords
+        .slice(0, 8)
+        .map((k) => ansis.yellow(k))
+        .join(', ')}`
+    : ''
   const quality = `  ${ansis.dim('quality')} ${scoreBar(r.score.quality)}  ${ansis.dim('popularity')} ${scoreBar(r.score.popularity)}`
   const details = [
     state.signals ? trustDetail(state.signals, state.now ?? Date.now()) : '',

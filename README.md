@@ -18,14 +18,13 @@ Siz is a unified package-management workflow layer: an interactive interface ove
 ### Discover
 
 - [x] Live interactive npm search with type-as-you-go multi-select
-- [x] Full-text search across name and description (`siz search`)
+- [x] One search command — every query is a full-text search across name and description, with name affinity **ranking** (never filtering) the results, so `siz react form validation` and `siz "state management"` return packages instead of nothing (`siz search` still works as a hidden, deprecated alias)
 - [x] GitHub-style qualifiers in queries (`keyword:` `author:` `scope:` `tag:`)
 - [x] Trust-aware discovery: deprecation, publish age, and provenance shown inline on each result, before install
 - [x] Download-trend signal — `↑`/`↓` download-count momentum inline on each result (scoped packages excepted)
 - [x] Replacement suggestions for deprecated packages — `→ replaced by …`, parsed from the deprecation message (the successor the maintainer named)
 - [x] Package-size signal — install size shown inline on every result (and bundle size on the focused row), before install
 - [x] License signal — the declared license shown inline on every result (a legal/compatibility fact, distinct from the health-oriented trust signals), with `⚖` when it can't be resolved from registry metadata
-- [ ] **Next** — One search command — name-affinity **ranking** replaces the name-only filter, so a multi-word query (`siz react form validation`, `siz "state management"`) returns results instead of nothing; `siz search` folds into `siz`
 - [ ] **Next** — Weekly download counts inline on every result, replacing npm's retired score bars (the search endpoint now returns a constant `1.000` for quality, popularity and maintenance on every package); scoped packages included via npm's single-package endpoint
 - [ ] **Next** — Deprecation and provenance read from the registry packument siz already fetches per result, leaving the third-party metadata service responsible for publish age alone
 - [ ] **Next** — Signal fetches bounded to the rows on screen (plus a prefetch margin) — fewer requests per search, unchanged progressive rendering; `--list` / `--json` still cover every result they print
@@ -54,7 +53,8 @@ Siz is a unified package-management workflow layer: an interactive interface ove
 - [x] Install via your package manager (npm / pnpm / yarn / bun / deno) — pick it at install time, with a per-package dependency vs devDependency toggle
 - [x] Direct project install / uninstall by name — `siz add <pkg>` installs, `siz rm <pkg>` uninstalls
 - [x] `siz add` has exactly two modes (install / `--bundle`) and `siz rm` is uninstall-only — `--fav` retired with favorites and now errors with the replacement flow
-- [ ] **Next** — Non-interactive mode — `--yes` on every mutating command, for CI and scripts; `--json` / `--list` without a query will exit non-zero instead of opening the interactive box
+- [x] Non-interactive guard — `--json` / `--list` without a query exits non-zero with a message instead of opening the interactive box, so a CI script with an empty query variable never gets a TUI
+- [ ] **Next** — Non-interactive mode — `--yes` on every mutating command, for CI and scripts
 - [ ] **Later** — Interactive uninstall picker — `siz rm` with no args opens a picker over installed deps, making removal as interactive as install
 - [ ] **Later** — Run scripts — `siz run <script>` through the detected package manager
 - [ ] **Later** — Execute without installing — `siz x <pkg>` (npx / pnpm dlx / bunx)
@@ -104,11 +104,9 @@ Requires Node.js >= 20.19.
 # Open the live search box (type to search, multi-select, then act)
 siz
 
-# Seed the search box with a query (name search — matches package names)
+# Seed the search box with a query (matches names and descriptions)
 siz vite
-
-# Full-text search, including package descriptions
-siz search vite
+siz "fast node logger"
 
 # Install packages into the current project (delegates to your package manager)
 siz add lodash zod
@@ -133,19 +131,20 @@ siz upgrade minor
 
 ## Search and act
 
-Run `siz` with no arguments to open a live search box. As you type, Siz queries the official npm registry (`registry.npmjs.org`) — no API key required:
+Run `siz` with no arguments to open a live search box. As you type, Siz queries the official npm registry (`registry.npmjs.org`) — no API key required.
 
-- `siz` and `siz <query>` search by package **name**.
-- `siz search <query>` runs a **full-text** search that also matches package **descriptions**.
+There is **one search**: every query is a full-text search across package names *and* descriptions, so you can type a name (`pino`) or describe what you want (`fast node logger`) and get results either way.
 
 ```bash
-siz                            # empty box, name search
-siz pino                       # box seeded with "pino" (matches package names)
-siz search "fast node logger"  # full-text search, also matches descriptions
+siz                            # empty box
+siz pino                       # box seeded with "pino" — `pino` itself comes first
+siz react form validation      # describe it; the registry's matches are returned
+siz "state management"
 ```
 
-Name search matches package **names** (fuzzy-ranked), so seed it with a name or name
-fragment; reach for `siz search` when you want to describe what a package *does*.
+Name affinity **ranks** those results: a name covering more of the query wins first, and within equal coverage each term counts by how well it matched — exact, then prefix, then substring, then fuzzy — with the registry's own relevance as the tiebreaker. So `siz pino` puts `pino` at row one, and `siz react form validation` puts `react-hook-form` above a package merely named `form`. Ranking never *removes* a result, so a descriptive multi-word query still returns everything the registry found.
+
+> `siz search <query>` still works as a deprecated alias of `siz <query>` (it prints a notice on stderr) and will be removed in a future release.
 
 Inside the box:
 
@@ -218,8 +217,10 @@ For scripting or piping, pass a query with a flag:
 ```bash
 siz pino --list
 siz zod --json
-siz search "fast node logger" --list
+siz "fast node logger" --list
 ```
+
+A query is **required** with either flag: `siz --json` with nothing to search for exits non-zero with a message rather than opening the interactive box, so a script whose query variable came out empty fails loudly instead of hanging on a TUI.
 
 ## Upgrade dependencies
 
@@ -338,8 +339,7 @@ siz bundle rm my-stack          # delete the whole bundle (after confirmation)
 
 | Command                                               | Description                                                                |
 | ----------------------------------------------------- | -------------------------------------------------------------------------- |
-| `siz` / `siz <query>`                                 | Open the live search box, searching by name                                |
-| `siz search <query>`                                  | Full-text search, including package descriptions                           |
+| `siz` / `siz <query>`                                 | Open the live search box — one search over names and descriptions, name-affinity ranked (`siz search <query>` is a deprecated alias) |
 | `siz add <pkg...>`                                    | Install package(s) into the project (`-D` / `--dev` for devDependencies, `--no-rules` to bypass rules) |
 | `siz add <pkg...> --bundle <name>`                    | Record packages into a bundle instead of installing (`-D` / `--dev` for devDependencies) |
 | `siz rm <pkg...>`                                     | Uninstall package(s) from the project                                      |

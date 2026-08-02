@@ -6,6 +6,10 @@
 
 ### Discover
 
+**Name affinity**:
+How closely a package's *name* matches the query terms — how many terms it covers first, then how well each matched (exact, prefix, substring, fuzzy subsequence). It is a **ranking** input only: it reorders the registry's results (with the registry's own relevance as the tiebreaker) and never removes one, which is why every query returns what the registry found. There is exactly one search — names and descriptions are both matched by the registry — so there is no search *mode* and no name-only view.
+_Avoid_: "name filter", "name search", "name mode" (all describe the removed behavior, where a multi-word query could subtract its way to zero results).
+
 **Result signal**:
 The umbrella term for any fact siz attaches inline to a search result to help the user judge it *before* installing — the parent of [[#trust-signal|trust signals]] (health), [[#size-signal|size signals]] (weight), and [[#license-signal|license signals]] (legal). All result signals share the same contract: purely informational (never block, filter, or reorder), fetched outside the search endpoint, and degrade silently when unavailable. What distinguishes the families is the *kind* of fact, not the mechanism.
 

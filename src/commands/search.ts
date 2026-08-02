@@ -3,7 +3,7 @@ import ansis from 'ansis'
 import type { TrustSignals } from '../core/types.ts'
 
 import { fetchLicenses } from '../core/license.ts'
-import { type SearchMode, searchPackages } from '../core/registry.ts'
+import { searchPackages } from '../core/registry.ts'
 import { fetchInstallSizes } from '../core/size.ts'
 import { fetchDownloadTrend, fetchTrustSignals } from '../core/trust.ts'
 import { renderSearchResult } from '../ui/render.ts'
@@ -11,13 +11,11 @@ import { renderSearchResult } from '../ui/render.ts'
 export interface SearchPrintOptions {
   size?: number
   json?: boolean
-  mode?: SearchMode
 }
 
 /** Non-interactive search output for `siz <query> --list` / `--json`. */
 export async function runSearchPrint(query: string, opts: SearchPrintOptions = {}): Promise<void> {
-  const mode = opts.mode ?? 'name'
-  const results = await searchPackages(query, { size: opts.size, mode })
+  const results = await searchPackages(query, { size: opts.size })
   const names = results.map((r) => r.name)
   // Independent sources (metadata + download API + packument), fetched in
   // parallel. Install size and license both derive from the packument, so they
@@ -57,12 +55,9 @@ export async function runSearchPrint(query: string, opts: SearchPrintOptions = {
     return
   }
 
-  // Name mode hides descriptions/keywords to match the interactive behavior.
-  const showDescription = mode === 'description'
   for (const r of results) {
     console.log(
       renderSearchResult(r, {
-        showDescription,
         signals: signals.get(r.name),
         size: installSizes.has(r.name) ? { installSize: installSizes.get(r.name) } : undefined,
         license: licenses.get(r.name),

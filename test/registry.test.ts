@@ -4,9 +4,9 @@ import type { SearchResult } from '../src/core/types.ts'
 
 import {
   buildSearchUrl,
-  filterByName,
   parseSearchObject,
   parseSearchResponse,
+  rankByName,
   searchPackages,
 } from '../src/core/registry.ts'
 
@@ -89,27 +89,46 @@ describe('parseSearchResponse', () => {
   })
 })
 
-describe('filterByName', () => {
+describe('rankByName', () => {
   const results = [
-    mkResult({ name: 'react', score: { final: 0.9, quality: 0, popularity: 0, maintenance: 0 } }),
-    mkResult({ name: 'preact', score: { final: 0.5, quality: 0, popularity: 0, maintenance: 0 } }),
-    // Matches only via description — must be excluded by name filtering.
     mkResult({ name: 'zustand', description: 'a small react state library' }),
+    mkResult({ name: 'preact', score: { final: 0.5, quality: 0, popularity: 0, maintenance: 0 } }),
+    mkResult({ name: 'react', score: { final: 0.9, quality: 0, popularity: 0, maintenance: 0 } }),
   ]
 
-  it('keeps only name matches and ignores description-only matches', () => {
-    const names = filterByName(results, ['react']).map((r) => r.name)
-    expect(names).toContain('react')
-    expect(names).not.toContain('zustand')
+  it('sorts the exact name match first', () => {
+    expect(rankByName(results, ['react'])[0].name).toBe('react')
   })
 
-  it('passes through (optionally limited) when there are no terms', () => {
-    expect(filterByName(results, [])).toHaveLength(3)
-    expect(filterByName(results, [], 2)).toHaveLength(2)
+  it('keeps every result, including name non-matches', () => {
+    const ranked = rankByName(results, ['react'])
+    expect(ranked).toHaveLength(3)
+    expect(ranked.map((r) => r.name).toSorted()).toEqual(['preact', 'react', 'zustand'])
   })
 
-  it('respects the limit', () => {
-    expect(filterByName(results, ['react'], 1)).toHaveLength(1)
+  it('ranks a name-prefix match above a mere substring match', () => {
+    const ranked = rankByName(results, ['reac']).map((r) => r.name)
+    expect(ranked.indexOf('react')).toBeLessThan(ranked.indexOf('preact'))
+  })
+
+  it('ranks broader query coverage above a single better-tier match', () => {
+    const multi = [
+      mkResult({ name: 'form' }), // exact — but matches one term of three
+      mkResult({ name: 'react-hook-form' }), // prefix + substring — two terms
+    ]
+    expect(rankByName(multi, ['react', 'form', 'validation'])[0].name).toBe('react-hook-form')
+  })
+
+  it('breaks ties on the registry score', () => {
+    const tied = [
+      mkResult({ name: 'b-cli', score: { final: 0.1, quality: 0, popularity: 0, maintenance: 0 } }),
+      mkResult({ name: 'a-cli', score: { final: 0.8, quality: 0, popularity: 0, maintenance: 0 } }),
+    ]
+    expect(rankByName(tied, ['cli']).map((r) => r.name)).toEqual(['a-cli', 'b-cli'])
+  })
+
+  it('passes results through untouched when there are no terms', () => {
+    expect(rankByName(results, []).map((r) => r.name)).toEqual(['zustand', 'preact', 'react'])
   })
 })
 
@@ -131,23 +150,48 @@ describe('searchPackages', () => {
     vi.restoreAllMocks()
   })
 
-  it('name mode restricts results to name matches', async () => {
-    mockFetch(['react', 'preact', 'vue'])
-    const results = await searchPackages('react', { mode: 'name' })
-    expect(results.map((r) => r.name)).not.toContain('vue')
-    expect(results.map((r) => r.name)).toContain('react')
+  it('ranks the closest name match first without dropping the rest', async () => {
+    mockFetch(['vue', 'preact', 'react'])
+    const results = await searchPackages('react')
+    expect(results[0].name).toBe('react')
+    expect(results).toHaveLength(3)
   })
 
-  it('description mode keeps the registry ordering', async () => {
-    mockFetch(['react', 'preact', 'vue'])
-    const results = await searchPackages('react', { mode: 'description' })
-    expect(results.map((r) => r.name)).toEqual(['react', 'preact', 'vue'])
+  it('returns results for a multi-word query (no name-only filtering)', async () => {
+    mockFetch(['react-hook-form', 'formik', 'zod'])
+    const results = await searchPackages('react form validation')
+    expect(results).toHaveLength(3)
+    expect(results[0].name).toBe('react-hook-form')
+  })
+
+  it('returns results for a descriptive phrase query', async () => {
+    mockFetch(['zustand', 'jotai', 'redux'])
+    const results = await searchPackages('state management')
+    expect(results.map((r) => r.name)).toEqual(['zustand', 'jotai', 'redux'])
+  })
+
+  it('preserves the number of results the registry returned', async () => {
+    mockFetch(['a', 'b', 'c', 'd'])
+    expect(await searchPackages('react')).toHaveLength(4)
+  })
+
+  it('bounds the fetch by the requested size', async () => {
+    let calledUrl = ''
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        calledUrl = String(url)
+        return { ok: true, json: async () => ({ objects: [] }) } as unknown as Response
+      }),
+    )
+    await searchPackages('react', { size: 5 })
+    expect(calledUrl).toContain('size=5')
   })
 
   it('no longer filters results client-side for a category: token', async () => {
     mockFetch(['react', 'lodash'])
-    const results = await searchPackages('category:frontend', { mode: 'description' })
-    expect(results.map((r) => r.name)).toEqual(['react', 'lodash'])
+    const results = await searchPackages('category:frontend')
+    expect(results.map((r) => r.name).toSorted()).toEqual(['lodash', 'react'])
   })
 
   it('sends qualifier-only queries to the registry and passes results through', async () => {
@@ -160,7 +204,7 @@ describe('searchPackages', () => {
       } as unknown as Response
     })
     vi.stubGlobal('fetch', fetchMock)
-    const results = await searchPackages('keyword:cli', { mode: 'name' })
+    const results = await searchPackages('keyword:cli')
     expect(calledUrl).toContain('keywords%3Acli')
     expect(results.map((r) => r.name)).toEqual(['cmd'])
   })

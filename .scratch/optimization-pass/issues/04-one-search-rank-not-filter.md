@@ -12,18 +12,18 @@ Parent spec: `.scratch/optimization-pass/PRD.md`.
 
 **Blocked by:** 03 — Remove heuristic categories.
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] `siz react form validation` returns a non-empty result set
-- [ ] `siz "state management"` returns a non-empty result set
-- [ ] An exact name match sorts first for a single-token query
-- [ ] Re-ranking never reduces the number of results returned by the registry
-- [ ] The result count requested by `-n/--size` still bounds how many results are fetched
-- [ ] The search mode concept is removed from the search path, the interactive command and the print command
-- [ ] Descriptions are shown for results
-- [ ] `siz search <query>` still works as a hidden alias and is no longer advertised as a separate command
-- [ ] `siz --json` and `siz --list` with no query exit non-zero with a message stating a query is required, and never open the interactive box
-- [ ] Search tests cover the two zero-result regressions as non-empty assertions, exact-name-first ordering, and count preservation, using the existing stubbed-fetch pattern
-- [ ] The `siz -h` block, examples and per-command help in the project instructions reflect one search command
-- [ ] A changeset is authored at `minor` describing the unified search and the non-interactive guard fix
-- [ ] `pnpm test`, `pnpm typecheck` and `pnpm lint` pass (leave `pnpm format` alone)
+- [x] `siz react form validation` returns a non-empty result set
+- [x] `siz "state management"` returns a non-empty result set
+- [x] An exact name match sorts first for a single-token query
+- [x] Re-ranking never reduces the number of results returned by the registry
+- [x] The result count requested by `-n/--size` still bounds how many results are fetched
+- [x] The search mode concept is removed from the search path, the interactive command and the print command
+- [x] Descriptions are shown for results
+- [x] `siz search <query>` still works as a hidden alias and is no longer advertised as a separate command
+- [x] `siz --json` and `siz --list` with no query exit non-zero with a message stating a query is required, and never open the interactive box
+- [x] Search tests cover the two zero-result regressions as non-empty assertions, exact-name-first ordering, and count preservation, using the existing stubbed-fetch pattern
+- [x] The `siz -h` block, examples and per-command help in the project instructions reflect one search command
+- [x] A changeset is authored at `minor` describing the unified search and the non-interactive guard fix
+- [x] `pnpm test`, `pnpm typecheck` and `pnpm lint` pass (leave `pnpm format` alone)
