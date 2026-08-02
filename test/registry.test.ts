@@ -16,7 +16,6 @@ function mkResult(partial: Partial<SearchResult> & { name: string }): SearchResu
     version: '1.0.0',
     description: '',
     keywords: [],
-    score: { final: 0, quality: 0, popularity: 0, maintenance: 0 },
     searchScore: 0,
     ...partial,
   }
@@ -51,14 +50,13 @@ describe('parseSearchObject', () => {
         },
         publisher: { username: 'colinhacks' },
       },
-      score: { final: 0.9, detail: { quality: 0.95, popularity: 0.8, maintenance: 0.7 } },
       searchScore: 1234,
     })
 
     expect(result.name).toBe('zod')
     expect(result.link).toBe('https://zod.dev')
     expect(result.keywords).toEqual(['validation', 'schema'])
-    expect(result.score.quality).toBe(0.95)
+    expect(result.searchScore).toBe(1234)
     expect(result.publisher).toBe('colinhacks')
   })
 
@@ -66,8 +64,13 @@ describe('parseSearchObject', () => {
     const result = parseSearchObject({ package: { name: 'x', version: '1.0.0' } })
     expect(result.description).toBe('')
     expect(result.keywords).toEqual([])
-    expect(result.score.final).toBe(0)
+    expect(result.searchScore).toBe(0)
     expect(result.link).toBeUndefined()
+  })
+
+  it('drops npm’s retired quality/popularity/maintenance scores', () => {
+    const result = parseSearchObject({ package: { name: 'x', version: '1.0.0' } })
+    expect(result).not.toHaveProperty('score')
   })
 })
 
@@ -92,8 +95,8 @@ describe('parseSearchResponse', () => {
 describe('rankByName', () => {
   const results = [
     mkResult({ name: 'zustand', description: 'a small react state library' }),
-    mkResult({ name: 'preact', score: { final: 0.5, quality: 0, popularity: 0, maintenance: 0 } }),
-    mkResult({ name: 'react', score: { final: 0.9, quality: 0, popularity: 0, maintenance: 0 } }),
+    mkResult({ name: 'preact', searchScore: 0.5 }),
+    mkResult({ name: 'react', searchScore: 0.9 }),
   ]
 
   it('sorts the exact name match first', () => {
@@ -119,10 +122,10 @@ describe('rankByName', () => {
     expect(rankByName(multi, ['react', 'form', 'validation'])[0].name).toBe('react-hook-form')
   })
 
-  it('breaks ties on the registry score', () => {
+  it('breaks ties on the registry relevance number', () => {
     const tied = [
-      mkResult({ name: 'b-cli', score: { final: 0.1, quality: 0, popularity: 0, maintenance: 0 } }),
-      mkResult({ name: 'a-cli', score: { final: 0.8, quality: 0, popularity: 0, maintenance: 0 } }),
+      mkResult({ name: 'b-cli', searchScore: 100 }),
+      mkResult({ name: 'a-cli', searchScore: 800 }),
     ]
     expect(rankByName(tied, ['cli']).map((r) => r.name)).toEqual(['a-cli', 'b-cli'])
   })

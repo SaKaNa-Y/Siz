@@ -42,10 +42,11 @@ export {
 } from './core/pm.ts'
 export {
   fetchTrustSignals,
-  fetchDownloadTrend,
+  fetchDownloadSignals,
   computeMomentum,
   isStale,
   formatPublishAge,
+  formatDownloads,
   parseReplacement,
   STALE_YEARS,
   MOMENTUM_THRESHOLD,

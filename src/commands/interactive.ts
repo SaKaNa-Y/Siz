@@ -15,10 +15,11 @@ import { fetchLicenses } from '../core/license.ts'
 import { searchPackages } from '../core/registry.ts'
 import { fetchBundleSize, fetchInstallSizes } from '../core/size.ts'
 import { addToBundle, listSavedEntries } from '../core/store.ts'
-import { fetchDownloadTrend, fetchTrustSignals } from '../core/trust.ts'
+import { fetchDownloadSignals, fetchTrustSignals } from '../core/trust.ts'
 import { highlightKeywords } from '../ui/highlight.ts'
 import { clack, ensure, pickOrCreateBundle, pickSetAction } from '../ui/prompts.ts'
 import {
+  downloadsInline,
   licenseDetail,
   licenseInline,
   signalLegend,
@@ -107,6 +108,9 @@ async function openSearchBox(seedQuery: string | undefined): Promise<BoxResult> 
       const license = licenseByName.get(name)
       if (!trust && !size && !license) return undefined
       const glyphs = [
+        // The weekly count leads: it is the one number on the row npm's retired
+        // quality/popularity bars used to occupy, and the easiest to scan down.
+        trust ? downloadsInline(trust) : '',
         trust ? trustGlyphs(trust, now) : '',
         size ? sizeInline(size) : '',
         license ? licenseInline(license) : '',
@@ -204,7 +208,7 @@ async function openSearchBox(seedQuery: string | undefined): Promise<BoxResult> 
               process.stdin.emit('keypress', '', { name: '' })
             }
             void fetchTrustSignals(names).then(mergeSignals)
-            void fetchDownloadTrend(names).then(mergeSignals)
+            void fetchDownloadSignals(names).then(mergeSignals)
 
             // Install size + license: eager for every row, and both derived from
             // the same memoized packument, so together they cost one request per

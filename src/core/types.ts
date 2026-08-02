@@ -74,14 +74,14 @@ export interface SearchResult {
   link?: string
   npmLink?: string
   publisher?: string
-  /** Normalized 0..1 quality/popularity/maintenance scores. */
-  score: {
-    final: number
-    quality: number
-    popularity: number
-    maintenance: number
-  }
-  /** Raw search relevance score from the registry. */
+  /**
+   * The registry's own relevance number for this hit. **Internal only** — it is
+   * the last tiebreaker in name-affinity ranking and is never rendered or emitted
+   * in `--json`. npm's `score.quality`/`popularity`/`maintenance` are gone from
+   * this shape entirely: the search endpoint now returns a constant `1.000` for
+   * all three on every package, so the bars they fed were structurally always
+   * full. Weekly downloads (see {@link TrustSignals.downloads}) replaced them.
+   */
   searchScore: number
 }
 
@@ -107,9 +107,17 @@ export interface TrustSignals {
   /**
    * Download-trend direction, derived from npm's download API (a different
    * endpoint than the search/metadata sources above). `undefined` when the
-   * trend is flat, below the volume floor, or unavailable (e.g. scoped packages).
+   * trend is flat, below the volume floor, or unavailable (e.g. scoped packages,
+   * for which only the last-week total is fetched).
    */
   momentum?: 'rising' | 'falling'
+  /**
+   * Last week's total downloads, straight from npm's download API — the adoption
+   * fact that replaced npm's retired quality/popularity bars. Absent when the
+   * endpoint had no data for the package; a missing count renders nothing rather
+   * than a zero, since "we don't know" and "nobody installs it" are not the same.
+   */
+  downloads?: number
 }
 
 /**

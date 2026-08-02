@@ -5,7 +5,7 @@ import type { TrustSignals } from '../core/types.ts'
 import { fetchLicenses } from '../core/license.ts'
 import { searchPackages } from '../core/registry.ts'
 import { fetchInstallSizes } from '../core/size.ts'
-import { fetchDownloadTrend, fetchTrustSignals } from '../core/trust.ts'
+import { fetchDownloadSignals, fetchTrustSignals } from '../core/trust.ts'
 import { renderSearchResult } from '../ui/render.ts'
 
 export interface SearchPrintOptions {
@@ -24,7 +24,7 @@ export async function runSearchPrint(query: string, opts: SearchPrintOptions = {
   // rate limit.
   const [trust, trend, installSizes, licenses] = await Promise.all([
     fetchTrustSignals(names),
-    fetchDownloadTrend(names),
+    fetchDownloadSignals(names),
     fetchInstallSizes(names),
     fetchLicenses(names),
   ])
@@ -39,8 +39,12 @@ export async function runSearchPrint(query: string, opts: SearchPrintOptions = {
     // scripting. The license key is deliberately three-valued: a string when
     // declared, an explicit `null` when the manifest declared none, and absent
     // entirely when the packument never resolved — so a consumer can tell "no
-    // license" from "siz could not check".
-    const enriched = results.map((r) => ({
+    // license" from "siz could not check". `downloads` follows the same rule:
+    // present when known, absent rather than zero when not.
+    //
+    // `searchScore` is dropped: it is the registry's internal relevance number,
+    // kept only as the ranking tiebreaker, and never part of the public shape.
+    const enriched = results.map(({ searchScore: _searchScore, ...r }) => ({
       ...r,
       ...signals.get(r.name),
       ...(installSizes.has(r.name) ? { installSize: installSizes.get(r.name) } : {}),

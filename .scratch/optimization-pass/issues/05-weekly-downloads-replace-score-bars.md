@@ -10,19 +10,19 @@ Parent spec: `.scratch/optimization-pass/PRD.md`.
 
 **Blocked by:** 04 — One search: rank, don't filter.
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] Result rows show a weekly download count inline, in place of the quality and popularity bars
-- [ ] The bars are removed from interactive rows, `--list` output and result cards
-- [ ] Unscoped packages get their count from the download data already fetched for momentum, with no additional request
-- [ ] Scoped packages get a last-week count via the single-package download endpoint, with bounded concurrency
-- [ ] The momentum arrow still appears for unscoped packages above the existing volume floor, and never for scoped packages
-- [ ] A missing count renders nothing rather than a zero
-- [ ] Download counts load progressively and degrade silently, like every other result signal
-- [ ] `--json` includes a weekly download count when known and omits it when not
-- [ ] `--json` no longer includes the quality, popularity, maintenance or relevance score fields
-- [ ] The relevance number is retained internally as the re-ranking tiebreaker only
-- [ ] A pure downloads formatter lives beside the existing publish-age formatter and is unit-tested for magnitude thresholds and rounding
-- [ ] Signal tests cover count retention for unscoped names, the scoped fallback producing a count but no arrow, and silent degrade when the download source fails
-- [ ] A changeset is authored at `minor` calling out the `--json` field removals and the new count
-- [ ] `pnpm test`, `pnpm typecheck` and `pnpm lint` pass (leave `pnpm format` alone)
+- [x] Result rows show a weekly download count inline, in place of the quality and popularity bars
+- [x] The bars are removed from interactive rows, `--list` output and result cards
+- [x] Unscoped packages get their count from the download data already fetched for momentum, with no additional request
+- [x] Scoped packages get a last-week count via the single-package download endpoint, with bounded concurrency
+- [x] The momentum arrow still appears for unscoped packages above the existing volume floor, and never for scoped packages
+- [x] A missing count renders nothing rather than a zero
+- [x] Download counts load progressively and degrade silently, like every other result signal
+- [x] `--json` includes a weekly download count when known and omits it when not
+- [x] `--json` no longer includes the quality, popularity, maintenance or relevance score fields
+- [x] The relevance number is retained internally as the re-ranking tiebreaker only
+- [x] A pure downloads formatter lives beside the existing publish-age formatter and is unit-tested for magnitude thresholds and rounding
+- [x] Signal tests cover count retention for unscoped names, the scoped fallback producing a count but no arrow, and silent degrade when the download source fails
+- [x] A changeset is authored at `minor` calling out the `--json` field removals and the new count
+- [x] `pnpm test`, `pnpm typecheck` and `pnpm lint` pass (leave `pnpm format` alone)

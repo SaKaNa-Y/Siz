@@ -2,8 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   computeMomentum,
-  fetchDownloadTrend,
+  fetchDownloadSignals,
   fetchTrustSignals,
+  formatDownloads,
   formatPublishAge,
   isStale,
   parseReplacement,
@@ -81,6 +82,37 @@ describe('formatPublishAge', () => {
   it('handles this-month and unknown dates', () => {
     expect(formatPublishAge(new Date(NOW).toISOString(), NOW)).toBe('published this month')
     expect(formatPublishAge(undefined, NOW)).toBe('')
+  })
+})
+
+describe('formatDownloads', () => {
+  it('prints counts under a thousand verbatim', () => {
+    expect(formatDownloads(0)).toBe('0')
+    expect(formatDownloads(812)).toBe('812')
+    expect(formatDownloads(999)).toBe('999')
+  })
+
+  it('keeps one decimal in the noisy 1k–10k band', () => {
+    expect(formatDownloads(1000)).toBe('1k')
+    expect(formatDownloads(1500)).toBe('1.5k')
+    expect(formatDownloads(9949)).toBe('9.9k')
+  })
+
+  it('rounds thousands whole above 10k', () => {
+    expect(formatDownloads(10_400)).toBe('10k')
+    expect(formatDownloads(340_500)).toBe('341k')
+  })
+
+  it('switches to millions and billions', () => {
+    expect(formatDownloads(1_000_000)).toBe('1M')
+    expect(formatDownloads(12_340_000)).toBe('12.3M')
+    expect(formatDownloads(2_500_000_000)).toBe('2.5B')
+  })
+
+  it('returns an empty string for missing or invalid counts, never a zero', () => {
+    expect(formatDownloads(undefined)).toBe('')
+    expect(formatDownloads(Number.NaN)).toBe('')
+    expect(formatDownloads(-1)).toBe('')
   })
 })
 
@@ -212,15 +244,18 @@ describe('computeMomentum', () => {
   })
 })
 
-describe('fetchDownloadTrend', () => {
+describe('fetchDownloadSignals', () => {
   // weekly/monthly totals per package; null means "no data" from the endpoint.
   const downloads: Record<string, { week: number; month: number } | null> = {
     'rise-a': { week: 4000, month: 10000 },
     'fall-a': { week: 1000, month: 10000 },
     'flat-a': { week: 2333, month: 10000 },
     'null-a': null,
-    'scope-peer': { week: 4000, month: 10000 },
+    '@scope/pkg': { week: 4000, month: 10000 },
     'memo-a': { week: 4000, month: 10000 },
+    'once-a': { week: 4000, month: 10000 },
+    'once-b': { week: 1000, month: 10000 },
+    'lone-a': { week: 4000, month: 10000 },
   }
 
   let fetchMock: ReturnType<typeof vi.fn>
@@ -229,7 +264,16 @@ describe('fetchDownloadTrend', () => {
     fetchMock = vi.fn(async (url: string) => {
       const u = String(url)
       const period = u.includes('/last-week/') ? 'week' : 'month'
-      const names = u.split('/').pop()!.split(',')
+      const tail = u.slice(u.indexOf(`/${period === 'week' ? 'last-week' : 'last-month'}/`))
+      const names = tail.split('/').slice(2).join('/').split(',')
+      // npm picks its response shape by name count, not by URL: one name gets a
+      // bare object, two or more get a name-keyed map. Mirror both, so the
+      // normalization in fetchPoint is exercised for real.
+      if (names.length === 1) {
+        const d = downloads[names[0]]
+        if (!d) return { ok: false } as unknown as Response
+        return { ok: true, json: async () => ({ downloads: d[period] }) } as unknown as Response
+      }
       const body: Record<string, { downloads: number } | null> = {}
       for (const name of names) {
         const d = downloads[name]
@@ -244,43 +288,60 @@ describe('fetchDownloadTrend', () => {
     vi.unstubAllGlobals()
   })
 
-  it('derives rising / falling verdicts and omits flat', async () => {
-    const map = await fetchDownloadTrend(['rise-a', 'fall-a', 'flat-a'])
-    expect(map.get('rise-a')).toEqual({ momentum: 'rising' })
-    expect(map.get('fall-a')).toEqual({ momentum: 'falling' })
-    expect(map.has('flat-a')).toBe(false)
+  it('derives rising / falling verdicts and keeps the weekly count either way', async () => {
+    const map = await fetchDownloadSignals(['rise-a', 'fall-a', 'flat-a'])
+    expect(map.get('rise-a')).toEqual({ downloads: 4000, momentum: 'rising' })
+    expect(map.get('fall-a')).toEqual({ downloads: 1000, momentum: 'falling' })
+    // Flat is no longer dropped: the arrow is suppressed, the count survives.
+    expect(map.get('flat-a')).toEqual({ downloads: 2333 })
   })
 
-  it('skips scoped packages without requesting them', async () => {
-    const map = await fetchDownloadTrend(['@scope/pkg', 'scope-peer'])
-    expect(map.has('@scope/pkg')).toBe(false)
-    for (const call of fetchMock.mock.calls) {
-      expect(String(call[0])).not.toContain('@scope')
-    }
+  it('retains the count for unscoped names without an extra request', async () => {
+    await fetchDownloadSignals(['once-a', 'once-b'])
+    // Exactly two bulk calls (last-week + last-month) for the whole chunk.
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('gives scoped packages a count via the single-package endpoint, but no arrow', async () => {
+    const map = await fetchDownloadSignals(['@scope/pkg'])
+    expect(map.get('@scope/pkg')).toEqual({ downloads: 4000 })
+    expect(map.get('@scope/pkg')?.momentum).toBeUndefined()
+    // One call, last-week only — the monthly baseline is never requested.
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(String(fetchMock.mock.calls[0][0])).toContain('/last-week/@scope/pkg')
+  })
+
+  it('reads the bare single-package shape a one-name request comes back in', async () => {
+    // npm answers a one-name "bulk" request with { downloads } rather than a
+    // name-keyed map; before it was normalized, a lone unscoped result — the last
+    // chunk of any odd-sized search — silently lost both its count and its arrow.
+    const map = await fetchDownloadSignals(['lone-a'])
+    expect(map.get('lone-a')).toEqual({ downloads: 4000, momentum: 'rising' })
   })
 
   it('omits packages the endpoint has no data for', async () => {
-    const map = await fetchDownloadTrend(['null-a'])
+    const map = await fetchDownloadSignals(['null-a'])
     expect(map.has('null-a')).toBe(false)
   })
 
   it('memoizes results so repeated names are not refetched', async () => {
-    await fetchDownloadTrend(['memo-a'])
+    await fetchDownloadSignals(['memo-a'])
     expect(fetchMock).toHaveBeenCalled()
     fetchMock.mockClear()
-    const map = await fetchDownloadTrend(['memo-a'])
+    const map = await fetchDownloadSignals(['memo-a'])
     expect(fetchMock).not.toHaveBeenCalled()
-    expect(map.get('memo-a')).toEqual({ momentum: 'rising' })
+    expect(map.get('memo-a')).toEqual({ downloads: 4000, momentum: 'rising' })
   })
 
-  it('degrades silently when the request fails', async () => {
+  it('degrades silently when the download source fails', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async () => {
         throw new Error('network down')
       }),
     )
-    const map = await fetchDownloadTrend(['degrade-a'])
+    const map = await fetchDownloadSignals(['degrade-a', '@degrade/scoped'])
     expect(map.has('degrade-a')).toBe(false)
+    expect(map.has('@degrade/scoped')).toBe(false)
   })
 })

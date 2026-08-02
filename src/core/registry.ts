@@ -25,10 +25,6 @@ interface RawSearchObject {
     links?: { npm?: string; homepage?: string; repository?: string }
     publisher?: { username?: string }
   }
-  score?: {
-    final?: number
-    detail?: { quality?: number; popularity?: number; maintenance?: number }
-  }
   searchScore?: number
 }
 
@@ -44,12 +40,9 @@ export function parseSearchObject(obj: RawSearchObject): SearchResult {
     link: links.homepage || links.repository || links.npm,
     npmLink: links.npm,
     publisher: pkg.publisher?.username,
-    score: {
-      final: obj.score?.final ?? 0,
-      quality: obj.score?.detail?.quality ?? 0,
-      popularity: obj.score?.detail?.popularity ?? 0,
-      maintenance: obj.score?.detail?.maintenance ?? 0,
-    },
+    // `score.quality`/`popularity`/`maintenance` are deliberately not read: npm
+    // returns a constant 1.000 for all three now. Only the relevance number is
+    // kept, purely as the ranking tiebreaker below.
     searchScore: obj.searchScore ?? 0,
   }
 }
@@ -97,7 +90,7 @@ function nameAffinity(name: string, terms: string[]): number {
  * Re-order results so the closest package-name matches come first, **without
  * removing any**: the registry already decided what is relevant, so name
  * affinity only ranks. Ordering is affinity, then fuzzy (subsequence) name
- * relevance, then the registry's own score, then the order it returned.
+ * relevance, then the registry's own relevance number, then the order it returned.
  * Empty terms (a qualifier-only query) pass through untouched.
  */
 export function rankByName(results: SearchResult[], terms: string[]): SearchResult[] {
@@ -117,7 +110,7 @@ export function rankByName(results: SearchResult[], terms: string[]): SearchResu
       if (a.affinity !== b.affinity) return b.affinity - a.affinity
       const fuzzyDelta = (fuzzy.get(b.item.name) ?? 0) - (fuzzy.get(a.item.name) ?? 0)
       if (fuzzyDelta !== 0) return fuzzyDelta
-      const scoreDelta = b.item.score.final - a.item.score.final
+      const scoreDelta = b.item.searchScore - a.item.searchScore
       if (scoreDelta !== 0) return scoreDelta
       return a.index - b.index
     })

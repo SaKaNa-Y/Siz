@@ -4,12 +4,16 @@ import type { LicenseSignals, SearchResult, SizeSignals, TrustSignals } from '..
 
 import { formatLicense, isUnclearLicense, truncateLicense } from '../core/license.ts'
 import { formatBytes, isHeavy } from '../core/size.ts'
-import { formatPublishAge, isStale } from '../core/trust.ts'
+import { formatDownloads, formatPublishAge, isStale } from '../core/trust.ts'
 
-/** A small 0..1 score bar like ▰▰▰▱▱. */
-export function scoreBar(value: number, width = 5): string {
-  const filled = Math.round(Math.max(0, Math.min(1, value)) * width)
-  return ansis.green('▰'.repeat(filled)) + ansis.dim('▱'.repeat(width - filled))
+/**
+ * Compact weekly-download annotation for a result row — `1.2M/wk`. '' when the
+ * count is unknown, so a row that never got download data renders nothing rather
+ * than a misleading zero.
+ */
+export function downloadsInline(signals: TrustSignals): string {
+  const text = formatDownloads(signals.downloads)
+  return text ? ansis.dim(`${text}/wk`) : ''
 }
 
 /**
@@ -30,6 +34,8 @@ export function trustGlyphs(signals: TrustSignals, now: number): string {
 /** Expanded, word-form trust signals for a focused row / `--list` card. */
 export function trustDetail(signals: TrustSignals, now: number): string {
   const parts: string[] = []
+  const downloads = formatDownloads(signals.downloads)
+  if (downloads) parts.push(ansis.dim(`${downloads} weekly downloads`))
   if (signals.deprecated) parts.push(ansis.red(`deprecated: ${signals.deprecated}`))
   if (signals.replacedBy?.length) {
     parts.push(ansis.cyan(`→ replaced by ${signals.replacedBy.join(', ')}`))
@@ -113,7 +119,6 @@ export function renderSearchResult(
         .map((k) => ansis.yellow(k))
         .join(', ')}`
     : ''
-  const quality = `  ${ansis.dim('quality')} ${scoreBar(r.score.quality)}  ${ansis.dim('popularity')} ${scoreBar(r.score.popularity)}`
   const details = [
     state.signals ? trustDetail(state.signals, state.now ?? Date.now()) : '',
     state.size ? sizeDetail(state.size) : '',
@@ -121,7 +126,7 @@ export function renderSearchResult(
   ].filter(Boolean)
   const signalsLine = details.length ? `  ${details.join(ansis.dim(' · '))}` : ''
 
-  return [header, desc, keywords, quality, signalsLine].filter(Boolean).join('\n')
+  return [header, desc, keywords, signalsLine].filter(Boolean).join('\n')
 }
 
 /**

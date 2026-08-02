@@ -23,14 +23,21 @@ const DOWNLOADS_ENDPOINT = 'https://api.npmjs.org/downloads/point'
 const DOWNLOADS_BATCH_SIZE = 128
 
 /**
+ * Max concurrent single-package download requests. The bulk endpoint rejects
+ * scoped names, so those cost one request each — bound the fan-out the way
+ * ./packument.ts does.
+ */
+const DOWNLOADS_CONCURRENCY = 8
+
+/**
  * Session-scoped memo of fetched signals, keyed by package name. Trust signals
  * change slowly, so a single fetch per package per process is plenty and keeps
  * re-typing the same query instant.
  */
 const cache = new Map<string, TrustSignals>()
 
-/** Session-scoped memo of download-trend verdicts, keyed by package name. */
-const trendCache = new Map<string, TrustSignals>()
+/** Session-scoped memo of download counts + trend verdicts, keyed by package name. */
+const downloadCache = new Map<string, TrustSignals>()
 
 /** True when `publishedAt` is more than {@link STALE_YEARS} years before `now`. */
 export function isStale(publishedAt: string | undefined, now: number): boolean {
@@ -50,6 +57,26 @@ export function formatPublishAge(publishedAt: string | undefined, now: number): 
   if (months < 12) return `published ${months}mo ago`
   const years = Math.floor(months / 12)
   return `published ${years}y ago`
+}
+
+/** `1.5` → `1.5`, `2.0` → `2` — one decimal, without a dangling `.0`. */
+function oneDecimal(value: number): string {
+  return value.toFixed(1).replace(/\.0$/, '')
+}
+
+/**
+ * Humanize a download count as `812` / `1.5k` / `340k` / `12.3M` (base-1000), or
+ * '' for a missing/invalid count. Magnitudes below 10k keep one decimal so the
+ * long tail stays distinguishable (`1.5k` rather than `2k`); above that the
+ * thousands are rounded whole, since nobody compares `341k` against `340k`.
+ */
+export function formatDownloads(count: number | undefined): string {
+  if (typeof count !== 'number' || !Number.isFinite(count) || count < 0) return ''
+  if (count < 1000) return String(Math.round(count))
+  if (count < 10_000) return `${oneDecimal(count / 1000)}k`
+  if (count < 1_000_000) return `${Math.round(count / 1000)}k`
+  if (count < 1_000_000_000) return `${oneDecimal(count / 1_000_000)}M`
+  return `${oneDecimal(count / 1_000_000_000)}B`
 }
 
 /**
@@ -238,7 +265,17 @@ export function computeMomentum(weekly: number, monthly: number): 'rising' | 'fa
 /** One bulk download-counts response: `{ "<pkg>": { downloads } | null }`. */
 type BulkDownloads = Record<string, { downloads: number } | null>
 
-/** Fetch one period's bulk download totals; null on any failure (silent degrade). */
+/**
+ * Fetch one period's download totals for a set of names, keyed by name; null on
+ * any failure (silent degrade).
+ *
+ * The endpoint has two response shapes and picks by *name count*, not by URL: ask
+ * for two or more names and it answers with the name-keyed map, ask for exactly
+ * one and it answers with that package's bare `{ downloads, package, … }` object.
+ * Both are normalized to the map here, so callers never see the difference — and
+ * a lone name (the last chunk of a search, or any scoped package, which is
+ * necessarily requested alone) doesn't silently come back empty.
+ */
 async function fetchPoint(period: string, names: string[]): Promise<BulkDownloads | null> {
   const url = `${DOWNLOADS_ENDPOINT}/${period}/${names.join(',')}`
   try {
@@ -247,30 +284,54 @@ async function fetchPoint(period: string, names: string[]): Promise<BulkDownload
       timeout(FETCH_TIMEOUT_MS, null),
     ])
     if (!res || !res.ok) return null
-    return (await res.json()) as BulkDownloads
+    const body = (await res.json()) as BulkDownloads | { downloads?: number }
+    const single = (body as { downloads?: number })?.downloads
+    if (typeof single === 'number') return { [names[0]]: { downloads: single } }
+    return body as BulkDownloads
   } catch {
     return null
   }
 }
 
 /**
- * Fetch download-trend momentum for the given package names via npm's download
- * API. Two bulk point calls (last-week + last-month) per ≤128-name chunk; the
- * trend is derived locally by {@link computeMomentum}. Scoped packages are
- * skipped (the bulk endpoint rejects them). Memoized per process and degrades
- * silently on any failure, so search is never blocked.
+ * Fetch weekly download counts (and, where both periods are available, trend
+ * momentum) for the given package names via npm's download API.
+ *
+ * Unscoped names go through the bulk point endpoint: two calls (last-week +
+ * last-month) per ≤128-name chunk, yielding the count *and* a locally derived
+ * {@link computeMomentum} verdict — the count is already in that response, so it
+ * costs nothing extra. Scoped names are rejected when batched with others, so
+ * each gets one last-week call of its own with bounded concurrency; that yields a
+ * count but no second period, hence never an arrow.
+ *
+ * Memoized per process and degrades silently on any failure, so search is never
+ * blocked. Only names with something to show appear in the returned map.
  */
-export async function fetchDownloadTrend(names: string[]): Promise<Map<string, TrustSignals>> {
-  // Scoped packages aren't supported by the bulk endpoint — skip them entirely.
-  const missing = names.filter((name) => !trendCache.has(name) && !name.startsWith('@'))
+export async function fetchDownloadSignals(names: string[]): Promise<Map<string, TrustSignals>> {
+  const missing = names.filter((name) => !downloadCache.has(name))
+  const scoped = missing.filter((name) => name.startsWith('@'))
+  const unscoped = missing.filter((name) => !name.startsWith('@'))
 
   const chunks: string[][] = []
-  for (let i = 0; i < missing.length; i += DOWNLOADS_BATCH_SIZE) {
-    chunks.push(missing.slice(i, i + DOWNLOADS_BATCH_SIZE))
+  for (let i = 0; i < unscoped.length; i += DOWNLOADS_BATCH_SIZE) {
+    chunks.push(unscoped.slice(i, i + DOWNLOADS_BATCH_SIZE))
   }
 
-  await Promise.all(
-    chunks.map(async (chunk) => {
+  // Scoped names: a worker pool draining one name at a time, so concurrency is
+  // capped at DOWNLOADS_CONCURRENCY rather than firing every scoped row at once.
+  let index = 0
+  const scopedWorker = async (): Promise<void> => {
+    while (index < scoped.length) {
+      const name = scoped[index++]
+      // eslint-disable-next-line no-await-in-loop
+      const week = await fetchPoint('last-week', [name])
+      const weekly = week?.[name]?.downloads
+      downloadCache.set(name, typeof weekly === 'number' ? { downloads: weekly } : {})
+    }
+  }
+
+  await Promise.all([
+    ...chunks.map(async (chunk) => {
       const [week, month] = await Promise.all([
         fetchPoint('last-week', chunk),
         fetchPoint('last-month', chunk),
@@ -278,21 +339,24 @@ export async function fetchDownloadTrend(names: string[]): Promise<Map<string, T
       for (const name of chunk) {
         const weekly = week?.[name]?.downloads
         const monthly = month?.[name]?.downloads
-        if (typeof weekly !== 'number' || typeof monthly !== 'number') {
+        if (typeof weekly !== 'number') {
           // No data (network gap or unknown package) — memo empty so we don't retry.
-          trendCache.set(name, {})
+          downloadCache.set(name, {})
           continue
         }
-        const momentum = computeMomentum(weekly, monthly)
-        trendCache.set(name, momentum ? { momentum } : {})
+        const signals: TrustSignals = { downloads: weekly }
+        const momentum = typeof monthly === 'number' ? computeMomentum(weekly, monthly) : undefined
+        if (momentum) signals.momentum = momentum
+        downloadCache.set(name, signals)
       }
     }),
-  )
+    ...Array.from({ length: Math.min(DOWNLOADS_CONCURRENCY, scoped.length) }, scopedWorker),
+  ])
 
   const out = new Map<string, TrustSignals>()
   for (const name of names) {
-    const signals = trendCache.get(name)
-    if (signals?.momentum) out.set(name, signals)
+    const signals = downloadCache.get(name)
+    if (signals?.momentum || typeof signals?.downloads === 'number') out.set(name, signals)
   }
   return out
 }

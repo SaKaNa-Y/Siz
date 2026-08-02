@@ -14,8 +14,8 @@ _Avoid_: "name filter", "name search", "name mode" (all describe the removed beh
 The umbrella term for any fact siz attaches inline to a search result to help the user judge it *before* installing — the parent of [[#trust-signal|trust signals]] (health), [[#size-signal|size signals]] (weight), and [[#license-signal|license signals]] (legal). All result signals share the same contract: purely informational (never block, filter, or reorder), fetched outside the search endpoint, and degrade silently when unavailable. What distinguishes the families is the *kind* of fact, not the mechanism.
 
 **Trust signal**:
-A **health/maintenance** fact about a package (one family of [[#result-signal|result signal]]), surfaced inline on a search result so the user can judge it before installing. The v1 set is deprecation status, publish age, provenance, and [[#momentum|momentum]]. Distinct from a [[#size-signal|size signal]], which is about *weight*, not health.
-_Avoid_: health badge, quality indicator (those overlap with npm's existing `score.*` bars)
+A **health/maintenance** fact about a package (one family of [[#result-signal|result signal]]), surfaced inline on a search result so the user can judge it before installing. The set is deprecation status, publish age, provenance, [[#download-count-weekly|weekly download count]], and [[#momentum|momentum]]. Distinct from a [[#size-signal|size signal]], which is about *weight*, not health.
+_Avoid_: health badge, quality indicator (both read as a graded verdict siz does not form)
 
 **Trust-aware discovery**:
 The Discover-track capability of attaching [[#trust-signal|trust signals]] to search results. It is purely informational — it never blocks or filters; it only informs the choice to install.
@@ -23,8 +23,9 @@ The Discover-track capability of attaching [[#trust-signal|trust signals]] to se
 **Provenance**:
 Verifiable evidence (npm's signed attestation) that a published package was built from the source it claims. Distinct from `trustedPublisher`, which is npm's separate flag for publisher identity. Treated together as the v1 "provenance" trust signal. **Positive-only**: a green `✓` shows when either is present; absence renders nothing (adoption is still low, so flagging its absence would be noise).
 
-**Score** (existing):
-npm's own relevance/quality/popularity/maintenance numbers (0..1) returned by the search endpoint and rendered as bars. A trust signal is NOT a score — scores come from search; trust signals come from the metadata call.
+**Score** (retired):
+npm's quality/popularity/maintenance numbers, once returned by the search endpoint and rendered as bars. The registry retired them — it now returns a constant `1.000` for all three on every package — so siz no longer parses, renders, or emits them; the [[#download-count-weekly|weekly download count]] took their place on the row. What remains is the endpoint's **relevance number** (`searchScore`), and it is strictly internal: the last tiebreaker in [[#name-affinity|name-affinity]] ranking, never shown and never in `--json`.
+_Avoid_: talking about "the score bars" as a current feature, or "popularity" as something siz displays.
 
 **Stale**:
 A package whose latest version was published more than **2 years** ago. Renders the `⚑` glyph. Fresher packages show no age glyph (the exact "published Xago" text still appears in the focused row's detail). Stale is a prompt to look closer, never a block.
@@ -36,12 +37,16 @@ A package whose registry metadata carries a non-empty `deprecated` message. Alwa
 The successor package name(s) a [[#deprecated|deprecated]] package's own message points users to (`→ replaced by X`), extracted (high-confidence only) from that message. It is a fact *about the message* — what the maintainer named — never an opinion siz forms; a deprecated package whose message names no successor shows none. Informational, like every [[#trust-signal|trust signal]]: it never blocks, filters, or acts. **Distinct** from the planned *lighter-alternative suggestion* (a curated, editorial map of leaner swaps for heavy packages) — that is siz's recommendation, this is the maintainer's. See ADR 0005.
 _Avoid_: "alternative", "recommendation" (those are the editorial, curated feature, not this).
 
+**Download count** (weekly):
+A package's **last-week download total** from npm's download API — the adoption fact that took over the row space npm's retired [[#score|score]] bars occupied. Shown on **every** result row (interactive, `--list`, and the `--json` `downloads` field), humanized by magnitude (`812`, `1.5k`, `340k`, `12.3M`). A [[#trust-signal|trust signal]] like [[#momentum|momentum]], and from the same source: unscoped names get the count out of the bulk response momentum already needs, scoped names get it from the single-package endpoint. **A count siz never learned renders nothing, not a zero** — the same unknown-vs-finding distinction the [[#unknown-license|unknown license]] draws.
+_Avoid_: "popularity" (that is the retired [[#score|score]]), "download count" alone (say *weekly* — the period is part of the fact).
+
 **Momentum** (download trend):
-The direction of a package's recent download volume — **rising** (`↑`, green) or **falling** (`↓`, red) — derived from npm's download API, a separate source from the metadata behind the other [[#trust-signal|trust signals]]. It is a [[#trust-signal|trust signal]], not a [[#score|score]]: `score.popularity` is npm's static popularity number, momentum is *change over time*. **Approximate by design** (a two-call proxy, see ADR 0002) and **two-sided** (unlike positive-only [[#provenance|provenance]], both directions show). Suppressed below a download-volume floor (too noisy) and **unavailable for scoped packages** (`@scope/pkg`), which the bulk download endpoint rejects — those simply show no momentum glyph. Flat/unknown renders nothing.
-_Avoid_: "popularity" (that is the existing [[#score|score]]), "downloads" (we show direction, not a count).
+The direction of a package's recent download volume — **rising** (`↑`, green) or **falling** (`↓`, red) — derived from npm's download API, a separate source from the metadata behind the other [[#trust-signal|trust signals]]. It is a [[#trust-signal|trust signal]] about *change over time*, and distinct from the [[#download-count-weekly|weekly download count]] it is computed alongside: one is a level, the other a direction. **Approximate by design** (a two-call proxy, see ADR 0002) and **two-sided** (unlike positive-only [[#provenance|provenance]], both directions show). Suppressed below a download-volume floor (too noisy) and **unavailable for scoped packages** (`@scope/pkg`), for which only the single-period count is fetched — those show a count but never an arrow. Flat/unknown renders nothing.
+_Avoid_: "popularity" (that is the retired [[#score|score]]), "downloads" (that is the [[#download-count-weekly|count]]; momentum is direction).
 
 **Size signal**:
-A **weight/cost** fact about a package (one family of [[#result-signal|result signal]]), surfaced inline so the user can weigh how heavy a package is before installing. Two members: [[#install-size|install size]] and [[#bundle-size|bundle size]]. A size signal is about how much a package *costs to add*, never about its health (that is a [[#trust-signal|trust signal]]) or its npm [[#score|score]]. Like every result signal it is informational — it never blocks, filters, or reranks. See ADR 0008.
+A **weight/cost** fact about a package (one family of [[#result-signal|result signal]]), surfaced inline so the user can weigh how heavy a package is before installing. Two members: [[#install-size|install size]] and [[#bundle-size|bundle size]]. A size signal is about how much a package *costs to add*, never about its health (that is a [[#trust-signal|trust signal]]). Like every result signal it is informational — it never blocks, filters, or reranks. See ADR 0008.
 _Avoid_: "trust signal" (that is health), "weight" alone (ambiguous — say install vs bundle).
 
 **Install size**:
