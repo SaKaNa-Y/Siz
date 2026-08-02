@@ -20,18 +20,22 @@ describe('parseQuery', () => {
     expect(parseQuery('kw:a keyword:b').qualifiers.keyword).toEqual(['a', 'b'])
   })
 
-  it('parses category (and cat alias), author, and scope', () => {
-    expect(parseQuery('category:frontend').qualifiers.category).toBe('frontend')
-    expect(parseQuery('cat:frontend').qualifiers.category).toBe('frontend')
+  it('parses author and scope', () => {
     expect(parseQuery('author:sindresorhus').qualifiers.author).toBe('sindresorhus')
     expect(parseQuery('scope:@vue').qualifiers.scope).toBe('vue')
   })
 
   it('separates plain terms from qualifiers in a mixed query', () => {
-    const q = parseQuery('zod category:frontend keyword:schema')
+    const q = parseQuery('zod author:colinhacks keyword:schema')
     expect(q.terms).toEqual(['zod'])
-    expect(q.qualifiers.category).toBe('frontend')
+    expect(q.qualifiers.author).toBe('colinhacks')
     expect(q.qualifiers.keyword).toEqual(['schema'])
+  })
+
+  it('no longer treats category/cat as a qualifier', () => {
+    expect(parseQuery('category:frontend').terms).toEqual(['category:frontend'])
+    expect(parseQuery('cat:frontend').terms).toEqual(['cat:frontend'])
+    expect(parseQuery('category:frontend').qualifiers).toEqual({})
   })
 
   it('keeps tokens with empty values or unknown keys as plain terms', () => {
@@ -55,8 +59,8 @@ describe('buildRegistryText', () => {
     expect(text).toContain('scope:vue')
   })
 
-  it('omits category (filtered client-side, not sent to the registry)', () => {
-    expect(buildRegistryText(parseQuery('category:frontend'))).toBe('')
+  it('passes an unknown key:value token through as a plain term', () => {
+    expect(buildRegistryText(parseQuery('category:frontend'))).toBe('category:frontend')
   })
 
   it('folds tag values into the keywords qualifier', () => {

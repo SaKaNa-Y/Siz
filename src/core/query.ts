@@ -2,15 +2,13 @@
  * GitHub-style query parsing for Siz search.
  *
  * A raw query string is split into plain search `terms` and `key:value`
- * qualifiers. Some qualifiers map straight onto npm's native search syntax
- * (`keywords:`, `author:`, `scope:`), while others (`category:`) are applied
- * client-side. `tag:` is context-aware — in npm discovery it behaves like
- * `keyword:`, while the favorites-browse path uses it against the user's own tags.
+ * qualifiers, all of which map straight onto npm's native search syntax
+ * (`keywords:`, `author:`, `scope:`). `tag:` is an alias of `keyword:`, folded
+ * into the same native `keywords:` qualifier.
  *
  * Examples:
  *   "react"                  -> terms: ["react"]
  *   "keyword:cli kw:tool"    -> qualifiers.keyword: ["cli", "tool"]
- *   "category:frontend zod"  -> terms: ["zod"], qualifiers.category: "frontend"
  *   "author:sindresorhus"    -> qualifiers.author: "sindresorhus"
  */
 
@@ -20,8 +18,6 @@ export interface ParsedQuery {
   qualifiers: {
     /** npm keywords; maps to the native `keywords:` qualifier. */
     keyword?: string[]
-    /** Siz category, filtered client-side via suggestCategory. */
-    category?: string
     /** npm publisher; maps to the native `author:` qualifier. */
     author?: string
     /** npm scope (without leading @); maps to the native `scope:` qualifier. */
@@ -36,8 +32,6 @@ const ALIASES: Record<string, keyof ParsedQuery['qualifiers']> = {
   keyword: 'keyword',
   keywords: 'keyword',
   kw: 'keyword',
-  category: 'category',
-  cat: 'category',
   author: 'author',
   scope: 'scope',
   tag: 'tag',
@@ -87,17 +81,15 @@ function applyQualifier(
       // Tolerate a leading @ but store the bare scope name.
       q.scope = value.replace(/^@/, '')
       return
-    case 'category':
     case 'author':
-      q[key] = value
+      q.author = value
       return
   }
 }
 
 /**
  * Reassemble an npm registry `text` string from a parsed query, emitting the
- * native qualifiers the registry understands. `category` is intentionally
- * omitted — it is filtered client-side.
+ * native qualifiers the registry understands.
  */
 export function buildRegistryText(q: ParsedQuery): string {
   const parts: string[] = [...q.terms]

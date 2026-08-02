@@ -2,7 +2,6 @@ import { Fzf } from 'fzf'
 
 import type { SearchResult } from './types.ts'
 
-import { normalizeCategory, suggestCategory } from './categories.ts'
 import { buildRegistryText, parseQuery } from './query.ts'
 
 const SEARCH_ENDPOINT = 'https://registry.npmjs.org/-/v1/search'
@@ -86,16 +85,6 @@ export function filterByName(
   return limit ? ranked.slice(0, limit) : ranked
 }
 
-/**
- * Keep only results whose heuristic category (name/description/keywords) maps
- * to the requested category. Unknown category strings filter to nothing.
- */
-export function filterByCategory(results: SearchResult[], category: string): SearchResult[] {
-  const target = normalizeCategory(category)
-  if (!target) return []
-  return results.filter((r) => suggestCategory(r) === target)
-}
-
 export interface SearchOptions {
   size?: number
   mode?: SearchMode
@@ -105,7 +94,7 @@ export interface SearchOptions {
  * Search the npm registry with Siz's query grammar.
  *
  * - Qualifiers (`keyword:`, `author:`, `scope:`) are sent to the registry,
- *   which supports them natively; `category:` is filtered client-side.
+ *   which supports them natively.
  * - In `name` mode, results are restricted/ranked to package-name matches and
  *   descriptions are not used for matching. `description` mode keeps the
  *   registry's full-text ranking.
@@ -126,9 +115,6 @@ export async function searchPackages(
   }
   let results = parseSearchResponse(await res.json())
 
-  if (parsed.qualifiers.category) {
-    results = filterByCategory(results, parsed.qualifiers.category)
-  }
   // Name mode narrows to name matches; an empty term list (qualifier-only
   // query) passes through so e.g. `keyword:cli` still returns its results.
   if (mode === 'name') {

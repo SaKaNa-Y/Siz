@@ -19,7 +19,6 @@ import { fetchDownloadTrend, fetchTrustSignals } from '../core/trust.ts'
 import { highlightKeywords } from '../ui/highlight.ts'
 import { clack, ensure, pickOrCreateBundle, pickSetAction } from '../ui/prompts.ts'
 import {
-  categoryLabel,
   licenseDetail,
   licenseInline,
   signalLegend,
@@ -54,9 +53,7 @@ type BoxResult =
 
 /** Build the per-result option label/hint, depending on the search mode. */
 function toSearchOption(pkg: SearchResult, input: string, mode: SearchMode): SearchOption {
-  const prefix = categoryLabel(pkg)
-  const name = `${highlightKeywords(pkg.name, input)} ${ansis.blue(`v${pkg.version}`)}`
-  const label = prefix ? `${prefix} ${name}` : name
+  const label = `${highlightKeywords(pkg.name, input)} ${ansis.blue(`v${pkg.version}`)}`
 
   // Descriptions are shown (and matched) only in description mode.
   let hint: string | undefined

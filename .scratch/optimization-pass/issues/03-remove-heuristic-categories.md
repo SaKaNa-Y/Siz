@@ -10,15 +10,15 @@ Parent spec: `.scratch/optimization-pass/PRD.md`.
 
 **Blocked by:** 02 — Remove favorites (schema v4 migration).
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] No category label appears on interactive result rows, in `--list` output, or on result cards
-- [ ] The categories module and its heuristics are deleted, along with the category suggestion and normalization helpers
-- [ ] The `category:` and `cat:` qualifiers no longer parse as qualifiers
-- [ ] The client-side category filter is removed from the search path
-- [ ] Category fields are removed from stored entry types and from the library surface
-- [ ] The categories test file is deleted; query, registry and store tests are updated for the removed qualifier, filter and field
-- [ ] Search continues to work identically otherwise — qualifier handling for `keyword:`, `author:`, `scope:` and `tag:` is unchanged
-- [ ] The `siz -h` block and per-command help in the project instructions drop the `category:` qualifier reference
-- [ ] A changeset is authored at `minor` noting the removed qualifier and label
-- [ ] `pnpm test`, `pnpm typecheck` and `pnpm lint` pass (leave `pnpm format` alone)
+- [x] No category label appears on interactive result rows, in `--list` output, or on result cards
+- [x] The categories module and its heuristics are deleted, along with the category suggestion and normalization helpers
+- [x] The `category:` and `cat:` qualifiers no longer parse as qualifiers
+- [x] The client-side category filter is removed from the search path
+- [x] Category fields are removed from stored entry types and from the library surface
+- [x] The categories test file is deleted; query, registry and store tests are updated for the removed qualifier, filter and field
+- [x] Search continues to work identically otherwise — qualifier handling for `keyword:`, `author:`, `scope:` and `tag:` is unchanged
+- [x] The `siz -h` block and per-command help in the project instructions drop the `category:` qualifier reference
+- [x] A changeset is authored at `minor` noting the removed qualifier and label
+- [x] `pnpm test`, `pnpm typecheck` and `pnpm lint` pass (leave `pnpm format` alone)

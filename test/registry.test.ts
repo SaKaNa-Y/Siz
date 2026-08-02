@@ -4,7 +4,6 @@ import type { SearchResult } from '../src/core/types.ts'
 
 import {
   buildSearchUrl,
-  filterByCategory,
   filterByName,
   parseSearchObject,
   parseSearchResponse,
@@ -114,21 +113,6 @@ describe('filterByName', () => {
   })
 })
 
-describe('filterByCategory', () => {
-  it('keeps results whose heuristic category matches (case-insensitive)', () => {
-    const results = [
-      mkResult({ name: 'react', keywords: ['react'] }),
-      mkResult({ name: 'lodash', description: 'utilities' }),
-    ]
-    const names = filterByCategory(results, 'frontend').map((r) => r.name)
-    expect(names).toEqual(['react'])
-  })
-
-  it('returns [] for an unknown category', () => {
-    expect(filterByCategory([mkResult({ name: 'x' })], 'nope')).toEqual([])
-  })
-})
-
 /** Stub global fetch with a registry response containing the given package names. */
 function mockFetch(names: string[]) {
   const body = {
@@ -158,6 +142,12 @@ describe('searchPackages', () => {
     mockFetch(['react', 'preact', 'vue'])
     const results = await searchPackages('react', { mode: 'description' })
     expect(results.map((r) => r.name)).toEqual(['react', 'preact', 'vue'])
+  })
+
+  it('no longer filters results client-side for a category: token', async () => {
+    mockFetch(['react', 'lodash'])
+    const results = await searchPackages('category:frontend', { mode: 'description' })
+    expect(results.map((r) => r.name)).toEqual(['react', 'lodash'])
   })
 
   it('sends qualifier-only queries to the registry and passes results through', async () => {

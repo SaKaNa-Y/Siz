@@ -19,7 +19,7 @@ Siz is a unified package-management workflow layer: an interactive interface ove
 
 - [x] Live interactive npm search with type-as-you-go multi-select
 - [x] Full-text search across name and description (`siz search`)
-- [x] GitHub-style qualifiers in queries (`keyword:` `author:` `scope:` `category:` `tag:`)
+- [x] GitHub-style qualifiers in queries (`keyword:` `author:` `scope:` `tag:`)
 - [x] Trust-aware discovery: deprecation, publish age, and provenance shown inline on each result, before install
 - [x] Download-trend signal — `↑`/`↓` download-count momentum inline on each result (scoped packages excepted)
 - [x] Replacement suggestions for deprecated packages — `→ replaced by …`, parsed from the deprecation message (the successor the maintainer named)
@@ -29,7 +29,7 @@ Siz is a unified package-management workflow layer: an interactive interface ove
 - [ ] **Next** — Weekly download counts inline on every result, replacing npm's retired score bars (the search endpoint now returns a constant `1.000` for quality, popularity and maintenance on every package); scoped packages included via npm's single-package endpoint
 - [ ] **Next** — Deprecation and provenance read from the registry packument siz already fetches per result, leaving the third-party metadata service responsible for publish age alone
 - [ ] **Next** — Signal fetches bounded to the rows on screen (plus a prefetch margin) — fewer requests per search, unchanged progressive rendering; `--list` / `--json` still cover every result they print
-- [ ] **Next** — Heuristic category labels dropped from results, along with the `category:` qualifier — a guessed label sat where facts go
+- [x] No guessed labels on results — the heuristic category label and the `category:` qualifier are gone; every signal on a row is a fact fetched from a source
 - [ ] **Later** — Ships-types signal — flag whether a package bundles its own TypeScript types or needs a separate `@types/*`
 - [ ] **Later** — Lighter-alternative suggestions for heavy packages — a curated map of leaner swaps (e.g. `moment` → `dayjs`), leaning on the package-size signal
 - [ ] **Later** — AI-assisted search: opt-in LLM query expansion and result reranking
@@ -356,12 +356,6 @@ siz bundle rm my-stack          # delete the whole bundle (after confirmation)
 siz list                  # everything you've saved
 siz list -b my-stack      # just one bundle
 ```
-
-### Categories
-
-Siz ships with a starter set of categories and labels each search result with a guess, based on its name, description, and keywords:
-
-`Frontend` · `Backend` · `Build Tools` · `Testing` · `Database` · `State Management` · `UI` · `DevTools` · `CLI Tools`
 
 ### Saved packages
 

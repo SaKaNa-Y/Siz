@@ -1,7 +1,6 @@
 // Public library surface for programmatic use.
 export * from './core/types.ts'
 export * from './core/registry.ts'
-export * from './core/categories.ts'
 export {
   loadData,
   saveData,

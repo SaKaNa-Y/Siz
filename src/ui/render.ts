@@ -2,7 +2,6 @@ import ansis from 'ansis'
 
 import type { LicenseSignals, SearchResult, SizeSignals, TrustSignals } from '../core/types.ts'
 
-import { suggestCategory } from '../core/categories.ts'
 import { formatLicense, isUnclearLicense, truncateLicense } from '../core/license.ts'
 import { formatBytes, isHeavy } from '../core/size.ts'
 import { formatPublishAge, isStale } from '../core/trust.ts'
@@ -11,15 +10,6 @@ import { formatPublishAge, isStale } from '../core/trust.ts'
 export function scoreBar(value: number, width = 5): string {
   const filled = Math.round(Math.max(0, Math.min(1, value)) * width)
   return ansis.green('▰'.repeat(filled)) + ansis.dim('▱'.repeat(width - filled))
-}
-
-/**
- * A single `[Category]` label derived from a result's name/description/keywords,
- * or '' when nothing matches. Used as an at-a-glance categorization marker.
- */
-export function categoryLabel(r: SearchResult): string {
-  const category = suggestCategory(r)
-  return category ? ansis.magenta(`[${category}]`) : ''
 }
 
 /**
@@ -118,8 +108,7 @@ export function renderSearchResult(
 ): string {
   const { showDescription = true } = state
 
-  const label = categoryLabel(r)
-  const header = `${label ? `${label} ` : ''}${ansis.bold.cyan(r.name)} ${ansis.dim(`v${r.version}`)}`
+  const header = `${ansis.bold.cyan(r.name)} ${ansis.dim(`v${r.version}`)}`
   const desc = !showDescription
     ? ''
     : r.description
