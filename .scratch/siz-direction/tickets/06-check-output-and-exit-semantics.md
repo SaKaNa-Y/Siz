@@ -20,3 +20,13 @@ An audit's output *is* its interface: a report nobody can read gets piped to `/d
 ## What would resolve this
 
 A rough rendered prototype of the three cases above (a stub is fine — no real fetching needed), reacted to and iterated, ending in an agreed output shape, an agreed JSON contract, and a settled exit-code rule with its rationale. Link the prototype from this ticket rather than pasting it.
+
+## Input from 05 (resolved 2026-08-05)
+
+Ticket 05 settled the vocabulary and handed this ticket three things it owns:
+
+- **A third output bucket.** Unknown facts (a packument that never resolved) are never violations and must be reported separately from findings. The prototype needs to show what that bucket looks like when it is empty, when it holds one package, and when the network was down and it holds all of them.
+- **The escalation flag's name.** 05 used `--fail-on-unknown` as a working name only. The audit exits `0` on unknowns by default; this flag turns the bucket into a failure for hermetic CI. Final naming is yours.
+- **Three severities to render**, not two: `error`, `warn`, `off`. `warn` must be visibly distinct from `error` *and* must not move the exit code — ticket 07's adoption story depends on a repo being able to run warn-only and stay green.
+
+Also fixed by 05, so the prototype should not re-open them: the audit has **no** `--no-rules` bypass (unlike install); a violation always names one package (aggregate/project-level findings are excluded from the vocabulary, see 18); and an unclear license is an ordinary finding, not an unknown.

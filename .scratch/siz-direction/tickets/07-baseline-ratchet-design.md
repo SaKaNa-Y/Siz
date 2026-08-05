@@ -20,3 +20,12 @@ Any policy enabled on an existing project fails on day one. If the only options 
 ## What would resolve this
 
 An agreed baseline design: file location and name, the identity rule with its trade-off consciously chosen, the visibility rule, the shrink mechanism, the regeneration command, and a stated relationship to PR-scoped checking. Vocabulary added to `CONTEXT.md` in the destination ticket.
+
+## Input from 05 (resolved 2026-08-05)
+
+Ticket 05 gave every rule a per-rule **`ignore`** list (glob array, scoped to the rule rather than global, so an exception cannot hide a package's *other* violations) and deliberately left one question to this ticket: **do `ignore` entries carry a reason or an expiry, or stay bare globs?** The ratchet is the case that actually needs that provenance, so it is yours to settle — note that JSON cannot carry a comment, which is the strongest argument for an object form.
+
+Two other 05 decisions shape the adoption story:
+
+- **Severity defaults to `error` when a rule is configured at all**, and `warn` exists explicitly for the repo that currently fails a rule and is climbing out. So there are already *two* adoption mechanisms in play — `warn` and a baseline — and this ticket should say when each is the right one rather than assuming the baseline is the only answer.
+- **Budgets are excluded from the rule vocabulary** and are ratchet-shaped by nature (nobody sets an aggregate ceiling from zero). Whatever baseline mechanism this ticket lands is the thing ticket 18 would build on.

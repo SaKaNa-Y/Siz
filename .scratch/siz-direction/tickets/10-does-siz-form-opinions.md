@@ -22,3 +22,11 @@ The answer constrains at least three fog patches (budgets, remediation depth, `-
 ## What would resolve this
 
 A stated rule, general enough to apply to the next feature that tests it, with the existing editorial thresholds either justified or flagged as debt — and a specific verdict on remediation, starter policies, budgets, and `--fix`. Destined for `CONTEXT.md` and probably its own ADR.
+
+## Input from 05 (resolved 2026-08-05)
+
+Ticket 05 repeatedly declined to form opinions and deferred them here, so this ticket has three concrete decisions waiting rather than an abstract question:
+
+- **`license.scope` defaults to `all`, uniformly with every other rule.** `prod` is the *useful* default (you do not ship your dev dependencies) but choosing it would be siz deciding what a team's licence exposure is. 05 kept the vocabulary uniform and left the override to you. This is the sharpest test case for the general rule, because the opinion is obviously correct and still declined.
+- **Budgets and starter policies** were both pushed out of the vocabulary (see 18) partly on opinion grounds — an aggregate ceiling is meaningless without someone choosing the number.
+- **Two editorial thresholds already ship** and are now precedent whether or not they were meant to be: `STALE_YEARS` (2y) in `core/trust.ts` and `HEAVY_INSTALL_BYTES` (~1MB) in `core/size.ts`. Under 05's vocabulary, `stale.max` and `installSize.max` have **no defaults at all** — a rule not written does not run. So siz currently has opinions in its *glyphs* and none in its *policy*, which is either a principled split worth stating or an inconsistency worth fixing.

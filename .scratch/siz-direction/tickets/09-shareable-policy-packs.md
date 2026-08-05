@@ -25,3 +25,20 @@ So:
 ## What would resolve this
 
 A decision on each half separately — composition and distribution — with, for whatever ships: the resolution rule, merge semantics per list, the override direction, the loosen-locally answer, the trust posture, and the release it lands in. "Neither, and here's what we'd need to see first" is a fully acceptable outcome and should be recorded as such rather than left implicit.
+
+## Input from 05 (resolved 2026-08-05)
+
+**Merge semantics are already decided — this ticket inherits them rather than choosing them.** Ticket 05 took 04's finding seriously (a merge rule got wrong fails *silently*) and fixed the table at the moment the vocabulary was defined, whether or not inheritance ever ships:
+
+| Key | Merge |
+| --- | --- |
+| `severity`, `max`, `scope` | child **replaces** |
+| `deny`, `ignore` | **union** |
+| `allow` | **intersection** |
+
+Principle: *a child may weaken the policy, but only by saying so.* Scalars replace freely (`"license": "off"` is explicit, local, greppable); lists never replace, because a list looks additive and a silently dropped parent entry is invisible in review. This is the asymmetry 04 predicted.
+
+Two consequences for this ticket:
+
+- The **loosen-locally question is answered**: yes, a child can always loosen. 05 records `extends` as **a convenience, not a control** — an inheritance chain that tries to be a security boundary is a different product (01 found it: OWASP Dependency-Track, a self-hosted server with the policy in a database). If this ticket wants to overturn that, it must say so explicitly.
+- **Every future rule ships its merge rule in the commit that adds it.** That is now a standing rule of the vocabulary; if inheritance ships, this ticket should make it a documented contribution requirement rather than a convention.

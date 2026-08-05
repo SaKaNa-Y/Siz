@@ -19,3 +19,13 @@ This is a `task`, not a decision: everything it records was decided in ticket 13
 ## What would resolve this
 
 The ADR merged and `CONTEXT.md` updated, with the terms actually used by the map's other resolved tickets. The README rewrite is **not** part of this ticket — that is a work item in the final spec, and it must not collide with the `optimization-pass` README rewrite still open in `.scratch/optimization-pass/`.
+
+## Input from 05 (resolved 2026-08-05)
+
+Ticket 05 settled the govern vocabulary, so three specific `CONTEXT.md` edits are now known rather than to-be-discovered:
+
+- **Add "policy"** — the committed `siz.config.json` artifact as a whole.
+- **Add "rule"** — one entry in its `rules` block, judging one package in isolation. Distinguish from a **budget** (judges the set; excluded from the vocabulary, see ticket 18).
+- **Broaden the existing "dependency rule" entry** from "name globs" to "any rule", demoting today's meaning to the `name` rule specifically. Its `_Avoid_` line needs revisiting, since "constraint" and "permission" were ruled out against the narrower sense.
+
+Note the word **predicate** must not appear in `CONTEXT.md` — it was this map's scratch term and 05 deliberately dropped it. It survives only in ticket 05's own filename and title.

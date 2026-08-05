@@ -3,7 +3,7 @@
 Labels: `wayfinder:task`
 Status: open
 Claimed by: —
-Blocked by: 05, 06, 07, 08, 09, 10, 11, 12, 13, 14, 15, 17
+Blocked by: 05, 06, 07, 08, 09, 10, 11, 12, 13, 14, 15, 17, 18
 
 ## What to do
 

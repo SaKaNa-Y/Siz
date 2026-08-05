@@ -19,3 +19,12 @@ The destination ticket writes this down; this ticket decides it.
 ## What would resolve this
 
 An agreed positioning statement, a stated relationship to the neighbouring tools, a verdict on the three-layer framing, and a re-cut Features roadmap with each listed entry explicitly kept, demoted, or dropped. The naming question answered even if the answer is "keep it, and here's why".
+
+## Input from 01 (resolved 2026-08-05)
+
+Two constraints on the sentence, from the absorption research:
+
+- **Do not lead with release-age or provenance gating.** Both are absorbed — pnpm's release-age gate is on by default since v11 and npm/yarn/bun all shipped equivalents. Claiming them reads as ignorance of the ecosystem.
+- **`npq` is the named competitor** (actively maintained, ~8k weekly downloads) and already covers four of the six fact families *and* runs as a standalone audit. The differentiation against it is precise and small: a committable policy file (npq is environment-variables-only), install size, and graded staleness.
+
+The defensible ground 01 identified: one committable file / one schema / one exit code across families; install size as a predicate (nothing surveyed exposes one); staleness as an admission rule (inverts everyone's cooldown logic); dual-mode audit-and-gate (every tool surveyed does one half); committable rather than dashboard-hosted (where every commercial answer differs).

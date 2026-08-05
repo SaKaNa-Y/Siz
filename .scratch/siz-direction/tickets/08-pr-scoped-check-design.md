@@ -24,3 +24,7 @@ The research surfaced a reason siz *can* do this that belongs in the record: too
 ## What would resolve this
 
 A decision — ship, defer, or drop — with the comparison basis, the config-changed rule, the unresolvable-base behaviour, the empty-diff output, and whether it is a flag or a mode. If deferred, recorded precisely enough that revisiting is cheap.
+
+## Input from 01 (resolved 2026-08-05)
+
+There is an incumbent here, and it is free: **`actions/dependency-review-action`** already gates PR-time presence for real — `allow-licenses` / `deny-packages` / `deny-groups` / `fail-on-severity`, enforceable as a required check via repository rulesets. Its limits are the opening: it fires **only on PRs that touch the manifest** (nothing already merged is ever audited), private repos need GHAS, GHES returns no license data at all, and an undetected license warns rather than fails. Design this ticket's answer against that tool specifically, not against a vacuum.
