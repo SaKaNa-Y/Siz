@@ -1,5 +1,74 @@
 # @sakana-y/siz
 
+## 0.5.0
+
+### Minor Changes
+
+- [`0e22203`](https://github.com/SaKaNa-Y/Siz/commit/0e2220348a7fd667e56843254fe9a70a543e6c82) Thanks [@SaKaNa-Y](https://github.com/SaKaNa-Y)! - Command-surface cleanups.
+
+  - **`siz upgrade latest` is removed.** `major` is now the only name for "newest overall" — it belongs to the same semver vocabulary as `minor` and `patch`, and the two names always resolved through the same branch. Passing `latest` errors with the accepted levels; bare `siz upgrade` is unchanged and still means newest overall. Library consumers: the exported `UpgradeMode` type loses its `'latest'` member, and `parseUpgradeMode` / `UPGRADE_LEVELS` / `DEFAULT_UPGRADE_MODE` are now exported alongside it.
+  - The interactive **version policy** prompt (Add to bundle) now offers all four strategies — caret, tilde, latest and exact — matching what `siz add --strategy` accepts.
+  - Recording a bundle entry with an explicit `@version` while `--strategy` is set now prints a notice that the version pinned the entry, instead of silently overriding the strategy.
+  - `--no-rules` no longer renders a misleading `(default: true)` in help, wherever the flag is registered.
+
+- [`c3a202b`](https://github.com/SaKaNa-Y/Siz/commit/c3a202b14d83e9ba9f7a2a336b1d5bdfbb14467a) Thanks [@SaKaNa-Y](https://github.com/SaKaNa-Y)! - Weekly download counts replace npm's retired score bars on every search result.
+
+  npm now returns a constant `1.000` for `quality`, `popularity` and `maintenance` on every package, so the `quality ▰▰▰▰▰  popularity ▰▰▰▰▰` bars were structurally always full. They are gone from interactive rows, `--list` output and result cards, and in their place each row leads with the package's weekly download count (`250.1M/wk`, `1.5k/wk`) — a fact you can actually compare.
+
+  Unscoped packages get the count from the download data siz already fetched for the `↑`/`↓` momentum arrow, at no extra request. Scoped packages (`@types/node`, `@tanstack/react-query`), which npm's bulk endpoint rejects and which previously showed nothing, now get a last-week count from its single-package endpoint with bounded concurrency — so they show a count, though still never an arrow. Counts load progressively and degrade silently like every other result signal, and a count siz couldn't fetch renders nothing rather than a misleading zero.
+
+  Along the way this fixes a latent bug in the download fetch: npm picks its response shape by name count, so a request for exactly one package comes back as a bare object rather than a name-keyed map. A lone unscoped result — the last chunk of any odd-sized search — was silently losing its data, which is why the `↑`/`↓` arrow sometimes went missing. Both shapes are now normalized.
+
+  **Breaking (`--json`):**
+
+  - **Added** `downloads` per result — present when known, absent (never `0`) when not.
+  - **Removed** the `score` object (`final`, `quality`, `popularity`, `maintenance`) and the `searchScore` field. The three score numbers are constants upstream; the registry's relevance number survives only inside siz, as the last tiebreaker in name-affinity ranking.
+
+  Library consumers: `SearchResult.score` is removed from the type, and `fetchDownloadTrend()` is renamed `fetchDownloadSignals()` — it now returns a count as well as a trend. A pure `formatDownloads()` is exported alongside `formatPublishAge()`.
+
+- [`215859b`](https://github.com/SaKaNa-Y/Siz/commit/215859b94ffb8a06eb18db37f100edc9d88d8505) Thanks [@SaKaNa-Y](https://github.com/SaKaNa-Y)! - **Heuristic category labels are gone.** Search results no longer carry a guessed `[Category]` prefix — in the interactive box, in `--list` output, or on result cards. The label was derived from a hardcoded substring table (`zod` read as `[DevTools]`, `zod-to-json-schema` as `[Backend]`) and sat in the same position as facts like `MIT` and `4.6 MB install`, which made a guess look like a signal. Bundles are categorization you chose, so a guessed taxonomy was redundant.
+
+  - **Query grammar.** The `category:` / `cat:` qualifier is removed. It is no longer accepted-and-ignored: `siz category:frontend` now treats `category:frontend` as a plain search term, exactly like any other unknown `key:value` token. `keyword:`, `author:`, `scope:` and `tag:` are unchanged.
+  - **Search.** The client-side category filter is gone from the search path; results come back as the registry ranked them.
+  - **Library surface.** The `categories` module is removed — `suggestCategory`, `normalizeCategory`, `CATEGORIES` and the `Category` type no longer exist. `filterByCategory` is removed from `registry.ts`, and `categoryLabel` from the render surface.
+
+- [`1bed8c0`](https://github.com/SaKaNa-Y/Siz/commit/1bed8c08449b08d17e2317522cb44e6be82090db) Thanks [@SaKaNa-Y](https://github.com/SaKaNa-Y)! - One search: name affinity now **ranks** results instead of filtering them.
+
+  `siz <query>` runs a single full-text search over package names and descriptions, and re-ranks what the registry returned so the closest name matches come first (query coverage first, then exact → prefix → substring → fuzzy per term, with the registry's relevance as the tiebreaker). Ranking never removes a result, so multi-word queries that previously returned **zero** packages — `siz react form validation`, `siz "state management"` — now return useful ones, while `siz pino` still puts `pino` at row one. Descriptions are shown on results everywhere.
+
+  `siz search <query>` keeps working as a deprecated, hidden alias of `siz <query>` for one minor release; it is no longer listed in `siz -h` and prints a deprecation notice on stderr.
+
+  Also fixed: `siz --json` / `siz --list` with no query now exits non-zero with a message stating a query is required, instead of falling through into the interactive box — a CI script whose query variable came out empty can no longer get a TUI.
+
+  Library: `filterByName` is replaced by `rankByName(results, terms)`; the `mode` option is gone from `searchPackages`, `SearchOptions` and `runSearchPrint` (the `SearchMode` type is removed); and `renderSearchResult()` no longer takes `showDescription` — descriptions and keywords always render.
+
+- [`d52602e`](https://github.com/SaKaNa-Y/Siz/commit/d52602e2eae1eed05c26d23e094863aeb89c2139) Thanks [@SaKaNa-Y](https://github.com/SaKaNa-Y)! - Favorites are gone — bundles are the only place packages are saved. Your favorites are not lost: on first run after upgrading they migrate into a bundle named `favorites`, so `siz list -b favorites` shows them.
+
+  - **Removed flags.** `siz add --fav` and `siz rm --fav` now error with a message naming the replacement flow rather than being silently ignored: save with `siz add <pkg> --bundle <name>`, remove with `siz bundle rm <name> <pkg>`, list with `siz list`.
+  - **`siz add` has exactly two modes** — install by default, record into a bundle with `--bundle <name>`. `siz rm <pkg>` means only "uninstall from this project", with no mode flag at all.
+  - **The interactive action menu** offers **Install** and **Add to bundle**; the **Favorite** action is gone.
+  - **Migration (store schema v4).** Every favorite becomes a bundle entry recorded as a regular dependency tracking latest. The version snapshot each favorite carried is dropped — it was captured whenever the package was favorited and never refreshed — and so is its guessed category. The migration never deletes a bundle, never overwrites an entry that already exists (so a `favorites` bundle you made yourself keeps its own entries), leaves every other bundle alone, and is safe to run twice.
+  - **Library surface.** `addFavorite`, `removeFavorite`, `listFavorites`, `setCategory`, and the `FavoritePackage` type are removed; `SizData` no longer has a `favorites` map. New: `FAVORITES_BUNDLE`, the bundle name the migration writes into.
+
+- [`891af01`](https://github.com/SaKaNa-Y/Siz/commit/891af01d19be150b1cbd1e7b5651dbe97bfd858a) Thanks [@SaKaNa-Y](https://github.com/SaKaNa-Y)! - Deprecation and provenance now come from the npm packument siz already fetches for every search result, instead of being bought a second time from the third-party metadata service. That service is consulted only for publish age now — the one fact the manifest doesn't carry — so the `⚑` stale flag is unchanged.
+
+  The `⚠` deprecated glyph, its message, the `→ replaced by …` successor suggestion, and the `✓` provenance mark all read the same way to you, and `--json` keeps the `deprecated`, `publishedAt`, `provenance` and `replacedBy` fields with unchanged names. Each source degrades on its own: a failing packument still leaves the age, a failing metadata batch still leaves deprecation and provenance.
+
+  Search also makes fewer requests than before: the packument memo now dedupes in-flight requests, so install size, license, deprecation and provenance genuinely share **one** fetch per package instead of each starting its own.
+
+  One deliberate narrowing: `✓` now means "the published version carries a provenance attestation" and no longer also covers npm's separate trusted-publisher flag, which the packument does not expose. A handful of packages that showed `✓` on the publisher flag alone will no longer show it. The mark stays positive-only — its absence never means "unsafe".
+
+- [`60f041c`](https://github.com/SaKaNa-Y/Siz/commit/60f041c7a3e49543245751b3c4512b59ee872dd8) Thanks [@SaKaNa-Y](https://github.com/SaKaNa-Y)! - Bundles now hold everything you've saved, and single entries can be removed.
+
+  - Pressing **Enter** on an empty search box opens a flat list of every package saved across all your bundles, each row tagged with the bundle it came from — selections flow into the same action menu search selections use, and each entry installs as the dependency type it was saved with.
+  - `siz list` prints that same flat list for scripting, showing each entry's version range, dependency type, and bundle. `-b/--bundle <name>` narrows it to one bundle; `-c/--category` is gone.
+  - `siz bundle rm <bundle> <pkg...>` removes exactly those entries from a bundle. A name that isn't in the bundle is reported and the rest still go; removing the last entry leaves an empty bundle. `siz bundle rm <bundle>` with no package names still deletes the whole bundle behind the existing confirmation.
+  - Library surface: new `listSavedEntries()` and `SavedEntry`; `removeFromBundle()` now returns `{ bundle, removed, missing }` instead of the bundle.
+
+### Patch Changes
+
+- [`7c0b394`](https://github.com/SaKaNa-Y/Siz/commit/7c0b394a250212d39d24d566a6bb1727d4910dcd) Thanks [@SaKaNa-Y](https://github.com/SaKaNa-Y)! - Interactive search now fetches result signals (install size, license, deprecation, provenance, download counts) only for the rows your terminal actually shows, plus a small prefetch margin — instead of one packument request per result in the whole set. Rows further down fill in as you scroll, nothing is fetched twice, and signals still load progressively without blocking the list, so results settle faster on a short terminal. `--list` and `--json` are unchanged: they print every result, so they still fetch signals for every result.
+
 ## 0.4.1
 
 ### Patch Changes
