@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { fetchLicenses } from '../src/core/license.ts'
+import { fetchInstallSizes } from '../src/core/size.ts'
 import {
   computeMomentum,
   fetchDownloadSignals,
@@ -11,22 +13,20 @@ import {
   STALE_YEARS,
 } from '../src/core/trust.ts'
 
-// Mock the network layer. getLatestVersionBatch (metadata) returns a row per
-// name keyed off the name so we can assert mapping, plus a PackageError for the
-// missing package.
+// Mock the metadata batch. It is now consulted for the publish date only — the
+// rows still carry deprecated/provenance the way fast-npm-meta does, precisely
+// so the tests can assert those are *ignored* in favour of the packument.
 const batch = vi.fn(async (names: string[]) =>
   names.map((name) => {
     switch (name) {
-      case 'dep-pkg':
-        return { name, version: '1.0.0', publishedAt: '2024-01-01', deprecated: 'use foo instead' }
-      case 'prov-pkg':
-        return { name, version: '1.0.0', publishedAt: '2024-01-01', provenance: true }
-      case 'trusted-pkg':
-        return { name, version: '1.0.0', publishedAt: '2024-01-01', trustedPublisher: true }
-      case 'plain-pkg':
-        return { name, version: '1.0.0', publishedAt: '2024-01-01' }
-      case 'memo-pkg':
-        return { name, version: '1.0.0', publishedAt: '2024-01-01', provenance: true }
+      case 'meta-only-pkg':
+        return {
+          name,
+          version: '1.0.0',
+          publishedAt: '2024-01-01',
+          deprecated: 'use ghost-successor instead',
+          trustedPublisher: true,
+        }
       case 'ghost':
         return { status: 404, name, error: 'Not found' }
       default:
@@ -176,45 +176,146 @@ describe('parseReplacement', () => {
 })
 
 describe('fetchTrustSignals', () => {
-  it('maps deprecation, publish date, and provenance', async () => {
+  // Deprecation and provenance come from the packument siz already fetches for
+  // every row; only the publish date still comes from the metadata batch. These
+  // bodies are the packument side — 'error' means the request fails.
+  const attested = { url: 'https://registry.npmjs.org/-/npm/v1/attestations/p@1.0.0' }
+  const manifests: Record<string, Record<string, unknown> | 'error'> = {
+    'dep-pkg': { deprecated: 'use foo instead' },
+    'plain-pkg': { dist: {} },
+    'prov-pkg': { dist: { attestations: attested } },
+    'memo-pkg': { dist: { attestations: attested } },
+    // Packument unreachable, so only the metadata batch has anything to say —
+    // and what it says about deprecation/provenance is deliberately ignored.
+    'meta-only-pkg': 'error',
+    ghost: 'error',
+  }
+
+  let fetchMock: ReturnType<typeof vi.fn>
+
+  beforeEach(() => {
+    fetchMock = vi.fn(async (url: string) => {
+      const match = String(url).match(/registry\.npmjs\.org\/(.+)\/latest$/)
+      const name = match ? decodeURIComponent(match[1].replace('%2f', '/')) : ''
+      const body = manifests[name]
+      if (!body || body === 'error') return { ok: false } as unknown as Response
+      return { ok: true, json: async () => body } as unknown as Response
+    })
+    vi.stubGlobal('fetch', fetchMock)
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('derives deprecation from the packument and the age from the metadata batch', async () => {
     const map = await fetchTrustSignals(['dep-pkg', 'plain-pkg'])
     expect(map.get('dep-pkg')).toEqual({
       deprecated: 'use foo instead',
       publishedAt: '2024-01-01',
-      provenance: undefined,
       replacedBy: ['foo'],
     })
-    expect(map.get('plain-pkg')).toEqual({
-      deprecated: undefined,
-      publishedAt: '2024-01-01',
-      provenance: undefined,
-    })
+    expect(map.get('plain-pkg')).toEqual({ publishedAt: '2024-01-01' })
   })
 
-  it('treats provenance OR trustedPublisher as provenance', async () => {
-    const map = await fetchTrustSignals(['prov-pkg', 'trusted-pkg'])
+  it('derives provenance from a distribution attestation, and only from that', async () => {
+    const map = await fetchTrustSignals(['prov-pkg', 'plain-pkg'])
     expect(map.get('prov-pkg')?.provenance).toBe(true)
-    expect(map.get('trusted-pkg')?.provenance).toBe(true)
+    // Positive-only: no attestation means the mark is simply absent.
+    expect(map.get('plain-pkg')?.provenance).toBeUndefined()
   })
 
-  it('records registry errors as empty signals', async () => {
+  it('ignores the metadata batch’s own deprecation and trusted-publisher fields', async () => {
+    const map = await fetchTrustSignals(['meta-only-pkg'])
+    // The batch row carries `deprecated` and `trustedPublisher`; neither is read
+    // any more, so all that survives from it is the publish date.
+    expect(map.get('meta-only-pkg')).toEqual({ publishedAt: '2024-01-01' })
+  })
+
+  it('records a package neither source knows about as empty signals', async () => {
     const map = await fetchTrustSignals(['ghost'])
     expect(map.get('ghost')).toEqual({})
+  })
+
+  it('keeps the age when the packument fails', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new Error('registry down')
+      }),
+    )
+    const map = await fetchTrustSignals(['degrade-packument'])
+    expect(map.get('degrade-packument')).toEqual({ publishedAt: '2024-01-01' })
+  })
+
+  it('keeps deprecation and provenance when the metadata batch fails', async () => {
+    batch.mockImplementationOnce(async () => {
+      throw new Error('metadata down')
+    })
+    manifests['degrade-meta'] = { deprecated: 'use foo instead', dist: { attestations: attested } }
+    const map = await fetchTrustSignals(['degrade-meta'])
+    expect(map.get('degrade-meta')).toEqual({
+      deprecated: 'use foo instead',
+      replacedBy: ['foo'],
+      provenance: true,
+    })
   })
 
   it('returns an empty map for no names (no request)', async () => {
     const map = await fetchTrustSignals([])
     expect(map.size).toBe(0)
     expect(batch).not.toHaveBeenCalled()
+    expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('memoizes results so repeated names are not refetched', async () => {
+  it('memoizes both sources so repeated names are not refetched', async () => {
     await fetchTrustSignals(['memo-pkg'])
     expect(batch).toHaveBeenCalledTimes(1)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
     batch.mockClear()
+    fetchMock.mockClear()
     const map = await fetchTrustSignals(['memo-pkg'])
     expect(batch).not.toHaveBeenCalled()
+    expect(fetchMock).not.toHaveBeenCalled()
     expect(map.get('memo-pkg')?.provenance).toBe(true)
+  })
+})
+
+describe('packument sharing across signal families', () => {
+  it('costs one request when trust, size and license are fetched in the same tick', async () => {
+    // The whole point of sourcing deprecation and provenance from the packument
+    // is that siz already fetches it. All three families start together (see
+    // commands/search.ts), so the memo has to dedupe the *in-flight* request —
+    // a value-only memo would have each of them miss and buy its own copy.
+    const fetchMock = vi.fn(
+      async () =>
+        ({
+          ok: true,
+          json: async () => ({
+            license: 'MIT',
+            deprecated: 'use foo instead',
+            dist: { unpackedSize: 1234, attestations: { url: 'u' } },
+          }),
+        }) as unknown as Response,
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    const [trust, sizes, licenses] = await Promise.all([
+      fetchTrustSignals(['shared-pkg']),
+      fetchInstallSizes(['shared-pkg']),
+      fetchLicenses(['shared-pkg']),
+    ])
+
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(trust.get('shared-pkg')).toEqual({
+      deprecated: 'use foo instead',
+      replacedBy: ['foo'],
+      provenance: true,
+      publishedAt: '2024-01-01',
+    })
+    expect(sizes.get('shared-pkg')).toBe(1234)
+    expect(licenses.get('shared-pkg')).toEqual({ license: 'MIT' })
+    vi.unstubAllGlobals()
   })
 })
 

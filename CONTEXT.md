@@ -21,7 +21,7 @@ _Avoid_: health badge, quality indicator (both read as a graded verdict siz does
 The Discover-track capability of attaching [[#trust-signal|trust signals]] to search results. It is purely informational — it never blocks or filters; it only informs the choice to install.
 
 **Provenance**:
-Verifiable evidence (npm's signed attestation) that a published package was built from the source it claims. Distinct from `trustedPublisher`, which is npm's separate flag for publisher identity. Treated together as the v1 "provenance" trust signal. **Positive-only**: a green `✓` shows when either is present; absence renders nothing (adoption is still low, so flagging its absence would be noise).
+Verifiable evidence (npm's signed attestation) that a published package was built from the source it claims — read as the presence of `dist.attestations` on the packument. Distinct from `trustedPublisher`, npm's separate flag for publisher identity, which the signal **no longer covers**: since deprecation and provenance moved onto the packument, `✓` means *attested*, one fact from one source, rather than either-of-two from a hosted aggregator. **Positive-only**: a green `✓` shows when an attestation is present; absence renders nothing (adoption is still low, so flagging its absence would be noise).
 
 **Score** (retired):
 npm's quality/popularity/maintenance numbers, once returned by the search endpoint and rendered as bars. The registry retired them — it now returns a constant `1.000` for all three on every package — so siz no longer parses, renders, or emits them; the [[#download-count-weekly|weekly download count]] took their place on the row. What remains is the endpoint's **relevance number** (`searchScore`), and it is strictly internal: the last tiebreaker in [[#name-affinity|name-affinity]] ranking, never shown and never in `--json`.
@@ -31,7 +31,7 @@ _Avoid_: talking about "the score bars" as a current feature, or "popularity" as
 A package whose latest version was published more than **2 years** ago. Renders the `⚑` glyph. Fresher packages show no age glyph (the exact "published Xago" text still appears in the focused row's detail). Stale is a prompt to look closer, never a block.
 
 **Deprecated**:
-A package whose registry metadata carries a non-empty `deprecated` message. Always renders the `⚠` glyph; the message shows in the focused row's detail.
+A package whose latest-version manifest carries a non-empty `deprecated` message (read from the packument siz already fetches per result). Always renders the `⚠` glyph; the message shows in the focused row's detail.
 
 **Replacement suggestion**:
 The successor package name(s) a [[#deprecated|deprecated]] package's own message points users to (`→ replaced by X`), extracted (high-confidence only) from that message. It is a fact *about the message* — what the maintainer named — never an opinion siz forms; a deprecated package whose message names no successor shows none. Informational, like every [[#trust-signal|trust signal]]: it never blocks, filters, or acts. **Distinct** from the planned *lighter-alternative suggestion* (a curated, editorial map of leaner swaps for heavy packages) — that is siz's recommendation, this is the maintainer's. See ADR 0005.

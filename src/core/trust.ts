@@ -2,6 +2,8 @@ import { getLatestVersionBatch } from 'fast-npm-meta'
 
 import type { TrustSignals } from './types.ts'
 
+import { fetchManifests, type PackageManifest, timeout } from './packument.ts'
+
 /** A package is "stale" when its latest version is older than this many years. */
 export const STALE_YEARS = 2
 
@@ -30,11 +32,12 @@ const DOWNLOADS_BATCH_SIZE = 128
 const DOWNLOADS_CONCURRENCY = 8
 
 /**
- * Session-scoped memo of fetched signals, keyed by package name. Trust signals
- * change slowly, so a single fetch per package per process is plenty and keeps
- * re-typing the same query instant.
+ * Session-scoped memo of publish dates, keyed by package name. The value may be
+ * `undefined` (the batch answered but had no date, e.g. a 404 row); what matters
+ * is that *an entry exists*, which records "we asked and got an answer" and keeps
+ * a resolved-but-dateless package distinct from one we never heard about.
  */
-const cache = new Map<string, TrustSignals>()
+const ageCache = new Map<string, string | undefined>()
 
 /** Session-scoped memo of download counts + trend verdicts, keyed by package name. */
 const downloadCache = new Map<string, TrustSignals>()
@@ -188,56 +191,81 @@ export function parseReplacement(message: string | undefined, selfName: string):
   return out
 }
 
-/** Resolve after `ms`, yielding `value`. Used to bound a slow network call. */
-function timeout<T>(ms: number, value: T): Promise<T> {
-  return new Promise((resolve) => {
-    // unref so a still-pending timer (the fetch won the race) never keeps the
-    // process alive — otherwise `--json`/`--list` would hang until it fires.
-    setTimeout(() => resolve(value), ms).unref()
-  })
+/**
+ * True when the published version carries a provenance attestation.
+ *
+ * Deliberately narrower than what the hosted metadata service reported: it is
+ * *attestation only*, and no longer folds in npm's separate trusted-publisher
+ * flag. The mark stays positive-only — its absence means "no attestation found",
+ * never "unsafe".
+ */
+function hasAttestation(manifest: PackageManifest): boolean {
+  return Boolean(manifest.dist?.attestations)
+}
+
+/**
+ * Populate {@link ageCache} for any names we have not asked about yet, via one
+ * batched fast-npm-meta call (retries disabled, short timeout). Publish age is
+ * the *only* fact siz still buys from that service — deprecation and provenance
+ * come from the packument, which siz already fetches for every row. On any
+ * failure it degrades silently, leaving those names uncached so the `⚑` stale
+ * flag simply doesn't show.
+ */
+async function fetchPublishAges(names: string[]): Promise<void> {
+  const missing = names.filter((name) => !ageCache.has(name))
+  if (missing.length === 0) return
+
+  try {
+    const results = await Promise.race([
+      getLatestVersionBatch(missing, { metadata: true, retry: false, throw: false }),
+      timeout(FETCH_TIMEOUT_MS, null),
+    ])
+    if (!results) return
+    for (const r of results) {
+      ageCache.set(r.name, 'error' in r ? undefined : (r.publishedAt ?? undefined))
+    }
+  } catch {
+    // Endpoint slow/down — leave uncached names absent; the age just won't show.
+  }
 }
 
 /**
  * Fetch trust signals (deprecation, publish age, provenance) for the given
- * package names via fast-npm-meta. One batched attempt, retries disabled, with
- * a short timeout — on any failure it degrades silently (returns whatever it
- * has, empty for the rest) so search is never blocked. Results are memoized for
- * the process, so only uncached names trigger a request.
+ * package names.
+ *
+ * Two independent sources, in parallel: the shared packument layer supplies the
+ * deprecation message (and the successor names parsed out of it) plus the
+ * provenance attestation — facts siz already pays for on every row — while the
+ * hosted metadata batch supplies only the publish date, which the manifest does
+ * not carry. Either can fail on its own; a dead packument still leaves the age,
+ * a dead metadata batch still leaves deprecation and provenance, and neither
+ * ever blocks the result list. Both sources memoize per process.
+ *
+ * A name appears in the returned map iff at least one source resolved for it, so
+ * "no signals to show" stays distinct from "we never found out".
  */
 export async function fetchTrustSignals(names: string[]): Promise<Map<string, TrustSignals>> {
-  const missing = names.filter((name) => !cache.has(name))
-
-  if (missing.length > 0) {
-    try {
-      const results = await Promise.race([
-        getLatestVersionBatch(missing, { metadata: true, retry: false, throw: false }),
-        timeout(FETCH_TIMEOUT_MS, null),
-      ])
-      if (results) {
-        for (const r of results) {
-          if ('error' in r) {
-            cache.set(r.name, {})
-            continue
-          }
-          const deprecated = r.deprecated || undefined
-          const replacedBy = deprecated ? parseReplacement(deprecated, r.name) : []
-          cache.set(r.name, {
-            deprecated,
-            publishedAt: r.publishedAt ?? undefined,
-            provenance: r.provenance || r.trustedPublisher || undefined,
-            replacedBy: replacedBy.length > 0 ? replacedBy : undefined,
-          })
-        }
-      }
-    } catch {
-      // Endpoint slow/down — leave uncached names absent; signals just won't show.
-    }
-  }
+  const [manifests] = await Promise.all([
+    fetchManifests(names).catch(() => new Map<string, PackageManifest>()),
+    fetchPublishAges(names),
+  ])
 
   const out = new Map<string, TrustSignals>()
   for (const name of names) {
-    const signals = cache.get(name)
-    if (signals) out.set(name, signals)
+    const manifest = manifests.get(name)
+    if (!manifest && !ageCache.has(name)) continue
+
+    const signals: TrustSignals = {}
+    const deprecated = manifest?.deprecated?.trim()
+    if (deprecated) {
+      signals.deprecated = deprecated
+      const replacedBy = parseReplacement(deprecated, name)
+      if (replacedBy.length > 0) signals.replacedBy = replacedBy
+    }
+    if (manifest && hasAttestation(manifest)) signals.provenance = true
+    const publishedAt = ageCache.get(name)
+    if (publishedAt) signals.publishedAt = publishedAt
+    out.set(name, signals)
   }
   return out
 }

@@ -12,16 +12,16 @@ Parent spec: `.scratch/optimization-pass/PRD.md`. Partially supersedes ADR 0003;
 
 **Blocked by:** 05 — Weekly downloads replace the score bars.
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] The packument projection includes the deprecation field and the distribution attestations alongside license and unpacked size, and remains a narrow projection
-- [ ] The `⚠` deprecated glyph and its focused-row message are derived from the packument
-- [ ] The replacement suggestion (`→ replaced by …`) still parses out of the deprecation message, per ADR 0005, including in `--list` and `--json`
-- [ ] The `✓` provenance mark is derived from the presence of an attestation, and remains positive-only
-- [ ] The third-party metadata batch is consulted only for publish age; the `⚑` stale flag and the "published X ago" detail are unchanged
-- [ ] The resolved-versus-never-resolved contract of the packument layer is preserved
-- [ ] Each source degrades silently and independently — a failing packument or a failing metadata batch never blocks the result list or suppresses the other's signals
-- [ ] `--json` still carries the deprecation, publish time and provenance fields with unchanged names and meanings
-- [ ] Signal tests cover deprecation and provenance derived from the packument, the replacement suggestion surviving, the metadata batch being used for publish age only, and independent silent degrade
-- [ ] A changeset is authored at `minor` noting that provenance narrows to attestation-only
-- [ ] `pnpm test`, `pnpm typecheck` and `pnpm lint` pass (leave `pnpm format` alone)
+- [x] The packument projection includes the deprecation field and the distribution attestations alongside license and unpacked size, and remains a narrow projection
+- [x] The `⚠` deprecated glyph and its focused-row message are derived from the packument
+- [x] The replacement suggestion (`→ replaced by …`) still parses out of the deprecation message, per ADR 0005, including in `--list` and `--json`
+- [x] The `✓` provenance mark is derived from the presence of an attestation, and remains positive-only
+- [x] The third-party metadata batch is consulted only for publish age; the `⚑` stale flag and the "published X ago" detail are unchanged
+- [x] The resolved-versus-never-resolved contract of the packument layer is preserved
+- [x] Each source degrades silently and independently — a failing packument or a failing metadata batch never blocks the result list or suppresses the other's signals
+- [x] `--json` still carries the deprecation, publish time and provenance fields with unchanged names and meanings
+- [x] Signal tests cover deprecation and provenance derived from the packument, the replacement suggestion surviving, the metadata batch being used for publish age only, and independent silent degrade
+- [x] A changeset is authored at `minor` noting that provenance narrows to attestation-only
+- [x] `pnpm test`, `pnpm typecheck` and `pnpm lint` pass (leave `pnpm format` alone)

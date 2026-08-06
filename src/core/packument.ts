@@ -1,8 +1,9 @@
 /**
  * Shared access to the npm **packument** (`registry.npmjs.org/<pkg>/latest`) —
  * the one response that backs more than one result-signal family. Install size
- * reads `dist.unpackedSize` from it; the license signal reads `license`. Keeping
- * the fetch here means both families cost **one** request per package, not two.
+ * reads `dist.unpackedSize` from it; the license signal reads `license`; the
+ * trust signals read `deprecated` and `dist.attestations`. Keeping the fetch here
+ * means all of them cost **one** request per package, not one each.
  *
  * See ADR 0009.
  */
@@ -31,7 +32,17 @@ export type LicenseField = string | { type?: string } | Array<string | { type?: 
 export interface PackageManifest {
   license?: LicenseField
   licenses?: LicenseField
-  dist?: { unpackedSize?: number }
+  /** Non-empty deprecation message when the maintainer deprecated the version. */
+  deprecated?: string
+  dist?: {
+    unpackedSize?: number
+    /**
+     * Present when the version was published with a provenance attestation. The
+     * registry returns an object (`{ url, provenance: { predicateType } }`); siz
+     * only reads whether it is there at all.
+     */
+    attestations?: { url?: string; provenance?: { predicateType?: string } }
+  }
 }
 
 /**
@@ -39,8 +50,13 @@ export interface PackageManifest {
  * request failed" — memoized so a dead registry is not re-hammered, and (more
  * importantly) so callers can tell *never resolved* apart from *resolved but
  * empty*. Manifests barely change; one fetch per package per process is plenty.
+ *
+ * It memoizes the **in-flight promise**, not just the settled value: the three
+ * families that read the packument (size, license, trust) all start in the same
+ * tick, so a value-only memo would have each of them miss and fire its own
+ * request — the very double-buying this layer exists to prevent.
  */
-const cache = new Map<string, PackageManifest | null>()
+const cache = new Map<string, Promise<PackageManifest | null>>()
 
 /** Resolve after `ms`, yielding `value`. Used to bound a slow network call. */
 export function timeout<T>(ms: number, value: T): Promise<T> {
@@ -66,8 +82,14 @@ async function fetchOne(name: string): Promise<PackageManifest | null> {
     if (!res || !res.ok) return null
     const body = (await res.json()) as PackageManifest
     if (!body || typeof body !== 'object') return null
-    // Project down to the fields we read, so the memo stays small.
-    return { license: body.license, licenses: body.licenses, dist: body.dist }
+    // Project down to the fields we read, so the memo stays small — a real
+    // manifest also carries full dependency maps, scripts and tarball metadata.
+    return {
+      license: body.license,
+      licenses: body.licenses,
+      deprecated: body.deprecated,
+      dist: { unpackedSize: body.dist?.unpackedSize, attestations: body.dist?.attestations },
+    }
   } catch {
     return null
   }
@@ -83,24 +105,39 @@ async function fetchOne(name: string): Promise<PackageManifest | null> {
  * license" (entry present, field empty) from "we never found out" (no entry).
  */
 export async function fetchManifests(names: string[]): Promise<Map<string, PackageManifest>> {
-  const missing = names.filter((name) => !cache.has(name))
+  const pending: Array<{ name: string; settle: (manifest: PackageManifest | null) => void }> = []
+  for (const name of names) {
+    if (cache.has(name)) continue
+    let settle!: (manifest: PackageManifest | null) => void
+    // Claim the name synchronously, before the first await: a caller that starts
+    // in the same tick then awaits this request instead of firing a second one.
+    // The promise is settled below, when the worker pool gets to the name.
+    cache.set(
+      name,
+      new Promise((resolve) => {
+        settle = resolve
+      }),
+    )
+    pending.push({ name, settle })
+  }
 
   let index = 0
   const worker = async (): Promise<void> => {
-    while (index < missing.length) {
-      const name = missing[index++]
+    while (index < pending.length) {
+      const { name, settle } = pending[index++]
       // Sequential by design: N workers each drain one at a time, so the pool
       // caps concurrency at PACKUMENT_CONCURRENCY rather than firing all at once.
       // eslint-disable-next-line no-await-in-loop
-      cache.set(name, await fetchOne(name))
+      settle(await fetchOne(name).catch(() => null))
     }
   }
-  await Promise.all(Array.from({ length: Math.min(PACKUMENT_CONCURRENCY, missing.length) }, worker))
+  await Promise.all(Array.from({ length: Math.min(PACKUMENT_CONCURRENCY, pending.length) }, worker))
 
+  const settled = await Promise.all(names.map((name) => cache.get(name)))
   const out = new Map<string, PackageManifest>()
-  for (const name of names) {
-    const manifest = cache.get(name)
+  names.forEach((name, i) => {
+    const manifest = settled[i]
     if (manifest) out.set(name, manifest)
-  }
+  })
   return out
 }

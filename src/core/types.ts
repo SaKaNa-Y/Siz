@@ -96,7 +96,11 @@ export interface TrustSignals {
   deprecated?: string
   /** ISO publish date of the latest version. */
   publishedAt?: string
-  /** True when the package has npm provenance or a trusted publisher. */
+  /**
+   * True when the published version carries a provenance attestation
+   * (`dist.attestations` on the packument). Positive-only: absent means no
+   * attestation was found, never that the package is untrustworthy.
+   */
   provenance?: boolean
   /**
    * Successor package name(s) parsed (high-confidence only) from the deprecation
