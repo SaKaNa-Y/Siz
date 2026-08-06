@@ -13,6 +13,10 @@ _Avoid_: "name filter", "name search", "name mode" (all describe the removed beh
 **Result signal**:
 The umbrella term for any fact siz attaches inline to a search result to help the user judge it *before* installing — the parent of [[#trust-signal|trust signals]] (health), [[#size-signal|size signals]] (weight), and [[#license-signal|license signals]] (legal). All result signals share the same contract: purely informational (never block, filter, or reorder), fetched outside the search endpoint, and degrade silently when unavailable. What distinguishes the families is the *kind* of fact, not the mechanism.
 
+**Signal window**:
+The slice of a result list whose eager [[#result-signal|result signals]] are actually fetched: the rows visible in the interactive box plus a small prefetch margin either side, tracking the focused row as the user scrolls. Rows outside it are simply *not fetched yet* — they fill in on scroll, and a name already fetched is never re-requested. The window is a **cost** device, not a display one: it changes how much network a search buys, never what a row shows, and it applies to the interactive box alone (`--list` and `--json` print every result, so they fetch signals for every result). [[#bundle-size|Bundle size]] is outside it entirely — focused-row-only by its own rule.
+_Avoid_: "pagination", "lazy signals" (bundle size is the lazy one; the windowed signals are still eager, just bounded).
+
 **Trust signal**:
 A **health/maintenance** fact about a package (one family of [[#result-signal|result signal]]), surfaced inline on a search result so the user can judge it before installing. The set is deprecation status, publish age, provenance, [[#download-count-weekly|weekly download count]], and [[#momentum|momentum]]. Distinct from a [[#size-signal|size signal]], which is about *weight*, not health.
 _Avoid_: health badge, quality indicator (both read as a graded verdict siz does not form)

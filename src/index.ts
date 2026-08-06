@@ -69,6 +69,15 @@ export {
 } from './core/license.ts'
 export { fetchManifests, type PackageManifest } from './core/packument.ts'
 export {
+  signalWindow,
+  windowNames,
+  type SignalWindow,
+  type SignalWindowOptions,
+  type WindowNamesOptions,
+  SIGNAL_VIEWPORT_ROWS,
+  SIGNAL_PREFETCH_MARGIN,
+} from './core/window.ts'
+export {
   findPackageJson,
   loadProjectManifest,
   loadManifestAt,

@@ -16,6 +16,7 @@ import { searchPackages } from '../core/registry.ts'
 import { fetchBundleSize, fetchInstallSizes } from '../core/size.ts'
 import { addToBundle, listSavedEntries } from '../core/store.ts'
 import { fetchDownloadSignals, fetchTrustSignals } from '../core/trust.ts'
+import { SIGNAL_VIEWPORT_ROWS, windowNames } from '../core/window.ts'
 import { highlightKeywords } from '../ui/highlight.ts'
 import { clack, ensure, pickOrCreateBundle, pickSetAction } from '../ui/prompts.ts'
 import {
@@ -42,6 +43,28 @@ function openInBrowser(url: string): void {
         ? `open "${url}"`
         : `xdg-open "${url}"`
   exec(cmd)
+}
+
+/** Nudge the prompt into a repaint, so async signal data shows up as it lands. */
+function rerender(): void {
+  process.stdin.emit('keypress', '', { name: '' })
+}
+
+/**
+ * Lines the box spends on itself — header, input, hints, legend, selection line,
+ * closing bar — i.e. what @clack's `limitOptions` subtracts as `rowPadding`
+ * before it decides how many result rows fit.
+ */
+const PROMPT_CHROME_ROWS = 8
+
+/**
+ * How many result rows are actually on screen, so the signal window tracks the
+ * terminal the user has rather than an assumed one. Falls back to the core
+ * default when the height is unknown (piped or non-TTY output).
+ */
+function visibleRows(): number {
+  const rows = process.stdout.rows
+  return rows ? Math.max(1, rows - PROMPT_CHROME_ROWS) : SIGNAL_VIEWPORT_ROWS
 }
 
 /** A selected package plus its chosen dependency type (`dev` = devDependency). */
@@ -82,8 +105,9 @@ async function openSearchBox(seedQuery: string | undefined): Promise<BoxResult> 
   // Trust signals arrive progressively (a second fetch after each result set),
   // read live at render time so rows fill in once they resolve.
   const signalsByName = new Map<string, TrustSignals>()
-  // Size signals: install size arrives eagerly (background, all rows); bundle
-  // size arrives lazily per focused row (see onFocus). Both read live at render.
+  // Size signals: install size arrives eagerly (background, windowed rows);
+  // bundle size arrives lazily per focused row (see onFocus). Both read live at
+  // render.
   const sizeByName = new Map<string, SizeSignals>()
   // License signals ride the same packument fetch as install size. A name is
   // present only once its manifest resolved — absence means "unknown", which must
@@ -92,9 +116,56 @@ async function openSearchBox(seedQuery: string | undefined): Promise<BoxResult> 
   // Names we've already kicked a (focus-only) bundle-size fetch for — guards the
   // per-render onFocus from re-requesting or looping.
   const bundleRequested = new Set<string>()
+  // Names whose eager signals have been requested. Signals are fetched for the
+  // visible window only (see core/window.ts), so this grows as the user scrolls;
+  // it spans searches, since the signal maps do too and the data is name-keyed.
+  // Marked before the fetches settle, so a failure is not retried — the same
+  // rule the packument memo already applies to a request that came back empty.
+  const signalRequested = new Set<string>()
+  // The current result set, in display order — the list the window indexes into.
+  let resultNames: string[] = []
   // Fixed for the session — publish-age strings don't drift over a few minutes,
   // and this avoids a Date.now() per row on every keystroke re-render.
   const now = Date.now()
+
+  /**
+   * Kick the eager signal fetches for the rows around `focusName` (the first row
+   * when nothing is focused yet). Only names not already requested are fetched,
+   * so scrolling back over seen rows costs nothing. Results merge into the
+   * name-keyed maps unconditionally — they stay correct whatever the user has
+   * typed since — and each family re-renders as it lands. Never blocks the list;
+   * every source degrades silently.
+   */
+  const fetchWindowSignals = (focusName?: string) => {
+    const focusIndex = focusName ? resultNames.indexOf(focusName) : 0
+    const pending = windowNames(resultNames, focusIndex < 0 ? 0 : focusIndex, {
+      viewport: visibleRows(),
+      exclude: signalRequested,
+    })
+    if (pending.length === 0) return
+    for (const name of pending) signalRequested.add(name)
+
+    // Two independent fetches (different APIs) merged additively onto the same
+    // entry, so neither clobbers the other regardless of order.
+    const mergeSignals = (signals: Map<string, TrustSignals>) => {
+      for (const [name, s] of signals) signalsByName.set(name, { ...signalsByName.get(name), ...s })
+      rerender()
+    }
+    void fetchTrustSignals(pending).then(mergeSignals)
+    void fetchDownloadSignals(pending).then(mergeSignals)
+
+    // Install size + license both derive from the same memoized packument, so
+    // together they cost one request per package rather than two.
+    void fetchInstallSizes(pending).then((sizes) => {
+      for (const [name, installSize] of sizes)
+        sizeByName.set(name, { ...sizeByName.get(name), installSize })
+      rerender()
+    })
+    void fetchLicenses(pending).then((licenses) => {
+      for (const [name, license] of licenses) licenseByName.set(name, license)
+      rerender()
+    })
+  }
 
   const selected = await searchPrompt({
     message: 'Search npm packages',
@@ -130,12 +201,16 @@ async function openSearchBox(seedQuery: string | undefined): Promise<BoxResult> 
     // rate-limited). Guarded so it fires at most once per package; the result
     // merges in and triggers a re-render, filling the focused-row detail.
     onFocus: (name) => {
+      // Scrolling drags the eager-signal window along with the focus; already
+      // requested rows are skipped, so this stays cheap on every render.
+      fetchWindowSignals(name)
+
       if (bundleRequested.has(name)) return
       bundleRequested.add(name)
       void fetchBundleSize(name).then((bundle) => {
         if (!bundle) return
         sizeByName.set(name, { ...sizeByName.get(name), bundle })
-        process.stdin.emit('keypress', '', { name: '' })
+        rerender()
       })
     },
     onToggle: (name) => depTypes.set(name, !depTypes.get(name)),
@@ -148,6 +223,7 @@ async function openSearchBox(seedQuery: string | undefined): Promise<BoxResult> 
       if (!input) {
         lastSearchTerm = ''
         searchResults = []
+        resultNames = []
         searchLoading.value = false
         if (debounceTimer) clearTimeout(debounceTimer)
         return []
@@ -163,13 +239,14 @@ async function openSearchBox(seedQuery: string | undefined): Promise<BoxResult> 
       if (input !== lastSearchTerm) {
         lastSearchTerm = input
         searchResults = []
+        resultNames = []
         if (debounceTimer) clearTimeout(debounceTimer)
 
         // eslint-disable-next-line @typescript-eslint/no-this-alias
         const self = this
         debounceTimer = setTimeout(async () => {
           searchLoading.value = true
-          process.stdin.emit('keypress', '', { name: '' })
+          rerender()
           try {
             const results = await searchPackages(input)
             if (lastSearchTerm !== input) return
@@ -193,37 +270,13 @@ async function openSearchBox(seedQuery: string | undefined): Promise<BoxResult> 
             updatedOpts.push(...searchResults)
             self.filteredOptions = updatedOpts
             self.focusedValue = updatedOpts[0]?.value
-            process.stdin.emit('keypress', '', { name: '' })
+            rerender()
 
-            // Progressive enhancement: fetch trust signals + download trend for
-            // this result set in the background and re-render when they arrive.
-            // Two independent fetches (different APIs) merged additively onto the
-            // same entry, so neither clobbers the other regardless of order.
-            // Never blocks the list; both degrade silently on failure.
-            const names = results.map((pkg) => pkg.name)
-            const mergeSignals = (signals: Map<string, TrustSignals>) => {
-              if (lastSearchTerm !== input) return
-              for (const [name, s] of signals)
-                signalsByName.set(name, { ...signalsByName.get(name), ...s })
-              process.stdin.emit('keypress', '', { name: '' })
-            }
-            void fetchTrustSignals(names).then(mergeSignals)
-            void fetchDownloadSignals(names).then(mergeSignals)
-
-            // Install size + license: eager for every row, and both derived from
-            // the same memoized packument, so together they cost one request per
-            // package rather than two. Same stale guard and degrade rules.
-            void fetchInstallSizes(names).then((sizes) => {
-              if (lastSearchTerm !== input) return
-              for (const [name, installSize] of sizes)
-                sizeByName.set(name, { ...sizeByName.get(name), installSize })
-              process.stdin.emit('keypress', '', { name: '' })
-            })
-            void fetchLicenses(names).then((licenses) => {
-              if (lastSearchTerm !== input) return
-              for (const [name, license] of licenses) licenseByName.set(name, license)
-              process.stdin.emit('keypress', '', { name: '' })
-            })
+            // Progressive enhancement: fetch the eager signals for the rows the
+            // box actually shows (plus a prefetch margin) in the background, and
+            // re-render as they arrive. Rows further down fill in on scroll.
+            resultNames = updatedOpts.map((opt) => opt.value)
+            fetchWindowSignals()
           } catch {
             // Search failed silently — direct option still works.
           } finally {
