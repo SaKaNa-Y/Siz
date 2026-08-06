@@ -15,15 +15,15 @@ Parent spec: `.scratch/optimization-pass/PRD.md`.
 
 **Blocked by:** None — can start immediately.
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] `siz upgrade latest` is rejected with a message listing the accepted levels
-- [ ] `siz upgrade major` and bare `siz upgrade` both mean newest overall, with unchanged ceiling semantics for `minor` and `patch`
-- [ ] The interactive bundle version-policy prompt offers latest, exact, caret and tilde
-- [ ] Recording a bundle entry with an explicit `@version` alongside `--strategy` prints a notice that the version pinned the entry
-- [ ] `--no-rules` help text no longer shows a misleading default, wherever the flag is registered
-- [ ] `siz help` and `siz version` still work
-- [ ] Upgrade level validation is covered by tests
-- [ ] The `siz -h` block and per-command help in the project instructions match the new level list and flag text
-- [ ] A changeset is authored at `minor` noting the removed upgrade level
-- [ ] `pnpm test`, `pnpm typecheck` and `pnpm lint` pass (leave `pnpm format` alone)
+- [x] `siz upgrade latest` is rejected with a message listing the accepted levels
+- [x] `siz upgrade major` and bare `siz upgrade` both mean newest overall, with unchanged ceiling semantics for `minor` and `patch`
+- [x] The interactive bundle version-policy prompt offers latest, exact, caret and tilde
+- [x] Recording a bundle entry with an explicit `@version` alongside `--strategy` prints a notice that the version pinned the entry
+- [x] `--no-rules` help text no longer shows a misleading default, wherever the flag is registered
+- [x] `siz help` and `siz version` still work
+- [x] Upgrade level validation is covered by tests
+- [x] The `siz -h` block and per-command help in the project instructions match the new level list and flag text
+- [x] A changeset is authored at `minor` noting the removed upgrade level
+- [x] `pnpm test`, `pnpm typecheck` and `pnpm lint` pass (leave `pnpm format` alone)

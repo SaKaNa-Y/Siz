@@ -67,7 +67,7 @@ Siz is a unified package-management workflow layer: an interactive interface ove
 - [x] Monorepo install & recursive upgrades — workspace picker on install, `siz upgrade -r`
 - [x] Workspace-aware discovery — honor declared `packages:` / `workspaces` globs, skip stray manifests
 - [x] Outdated report — `siz outdated`, read-only and non-interactive (`--json` for CI, `--exit-code` to gate); shares the version-fetch and comparison core with `siz upgrade`
-- [ ] **Next** — One name for "newest overall" — the redundant `latest` level folds into `major` (bare `siz upgrade` unchanged)
+- [x] One name for "newest overall" — the redundant `latest` level folded into `major` (bare `siz upgrade` unchanged)
 - [ ] **Next** — Upgrade filters — `--include` / `--exclude` name globs to scope which dependencies are considered before the list renders (`taze` parity)
 - [ ] **Later** — Per-package upgrade modes — pin a package to a fixed level (e.g. always minor) regardless of the global level
 - [ ] **Later** — Trust signals in the outdated report — surface deprecated/stale flags alongside version drift
@@ -236,7 +236,7 @@ siz upgrade -r         # recurse into every package.json under the current dir
 siz upgrade --dry-run  # preview the changes without writing or installing
 ```
 
-Levels use **ceiling** semantics (like [`taze`](https://github.com/antfu-collective/taze)): `minor` lifts each package to the newest version within its current major, `patch` to the newest within its current major.minor, and bare `upgrade` / `major` / `latest` to the absolute newest. Pre-1.0 `0.x` versions are treated as breaking, so `minor`/`patch` never cross a `0.x` boundary.
+Levels use **ceiling** semantics (like [`taze`](https://github.com/antfu-collective/taze)): `minor` lifts each package to the newest version within its current major, `patch` to the newest within its current major.minor, and bare `upgrade` / `major` to the absolute newest. Pre-1.0 `0.x` versions are treated as breaking, so `minor`/`patch` never cross a `0.x` boundary.
 
 In a monorepo, `-r` / `--recursive` discovers the workspace's member `package.json` files and offers all of their updates in one list, each row tagged with its package. Discovery is **workspace-aware**: when a workspace is declared — pnpm's `packages:` in `pnpm-workspace.yaml`, or an npm/yarn `workspaces` field — only the declared members (plus the root) are scanned, so a stray `package.json` in `examples/`, `fixtures/`, or `docs/` is left alone. With no workspace definition, `-r` falls back to globbing every `package.json` under the current directory (skipping `node_modules`, `dist`, and `.git`). Each dependency is resolved independently per package, the manifests are rewritten in place, and a single install runs at the root. Without `-r`, `siz upgrade` only touches the nearest `package.json`.
 
@@ -346,7 +346,7 @@ siz bundle rm my-stack          # delete the whole bundle (after confirmation)
 | `siz add <pkg...> --bundle <name>`                    | Record packages into a bundle instead of installing (`-D` / `--dev` for devDependencies) |
 | `siz rm <pkg...>`                                     | Uninstall package(s) from the project                                      |
 | `siz bundle <list \| install \| show \| rm \| rename>` | Manage preset bundles (e.g. `siz bundle install my-stack`; `siz bundle rm <name> <pkg...>` drops single entries) |
-| `siz upgrade [level]` / `siz up`                      | Upgrade this project's dependencies (`major` \| `minor` \| `patch` \| `latest`) |
+| `siz upgrade [level]` / `siz up`                      | Upgrade this project's dependencies (`major` \| `minor` \| `patch`) |
 | `siz outdated`                                        | Read-only report of outdated dependencies (`--json` for CI, `--exit-code` to gate) |
 | `siz list` / `siz ls`                                 | List every package saved across your bundles (`-b` / `--bundle <name>` for one bundle) |
 | `siz help` / `siz --help`                             | Show help                                                                  |

@@ -5,7 +5,13 @@ import type { ProjectDep, ProjectManifest } from '../src/core/project.ts'
 
 import { applyPrefix, currentVersionFromRange, detectRangePrefix } from '../src/core/compare.ts'
 import { collectQueryNames } from '../src/core/resolve.ts'
-import { analyzeDep, buildUpgradePlan, planManifests, resolveTarget } from '../src/core/upgrade.ts'
+import {
+  analyzeDep,
+  buildUpgradePlan,
+  parseUpgradeMode,
+  planManifests,
+  resolveTarget,
+} from '../src/core/upgrade.ts'
 
 function info(
   name: string,
@@ -51,6 +57,27 @@ describe('detectRangePrefix / applyPrefix', () => {
   })
 })
 
+describe('parseUpgradeMode', () => {
+  it('accepts the three semver levels', () => {
+    expect(parseUpgradeMode('major')).toBe('major')
+    expect(parseUpgradeMode('minor')).toBe('minor')
+    expect(parseUpgradeMode('patch')).toBe('patch')
+  })
+
+  it('defaults to major (newest overall) when no level is given', () => {
+    expect(parseUpgradeMode(undefined)).toBe('major')
+  })
+
+  it('rejects the retired `latest` level, listing the accepted ones', () => {
+    expect(() => parseUpgradeMode('latest')).toThrow(/major \| minor \| patch/)
+    expect(() => parseUpgradeMode('latest')).toThrow(/latest/)
+  })
+
+  it('rejects an unknown level', () => {
+    expect(() => parseUpgradeMode('newest')).toThrow(/newest/)
+  })
+})
+
 describe('resolveTarget (ceiling semantics)', () => {
   const vi = info('pkg', ['1.2.3', '1.2.9', '1.5.0', '2.0.0', '2.1.0'])
 
@@ -62,29 +89,28 @@ describe('resolveTarget (ceiling semantics)', () => {
     expect(resolveTarget('1.2.3', vi, 'minor')).toBe('1.5.0')
   })
 
-  it('major/latest reach the newest stable', () => {
+  it('major reaches the newest stable', () => {
     expect(resolveTarget('1.2.3', vi, 'major')).toBe('2.1.0')
-    expect(resolveTarget('1.2.3', vi, 'latest')).toBe('2.1.0')
   })
 
   it('treats pre-1.0 minor bumps as breaking (caret on 0.x stays in 0.minor)', () => {
     const zero = info('z', ['0.4.0', '0.4.5', '0.5.0'])
     expect(resolveTarget('0.4.0', zero, 'minor')).toBe('0.4.5')
     expect(resolveTarget('0.4.0', zero, 'patch')).toBe('0.4.5')
-    // major/latest may still cross the 0.x boundary on request.
+    // major may still cross the 0.x boundary on request.
     expect(resolveTarget('0.4.0', zero, 'major')).toBe('0.5.0')
   })
 
   it('excludes prereleases unless the current version is one', () => {
     const pre = info('p', ['1.0.0', '1.1.0', '2.0.0-beta.1'])
-    expect(resolveTarget('1.0.0', pre, 'latest')).toBe('1.1.0')
+    expect(resolveTarget('1.0.0', pre, 'major')).toBe('1.1.0')
 
     const fromPre = info('p', ['1.0.0-beta.1', '1.0.0-beta.2', '1.0.0'])
-    expect(resolveTarget('1.0.0-beta.1', fromPre, 'latest')).toBe('1.0.0')
+    expect(resolveTarget('1.0.0-beta.1', fromPre, 'major')).toBe('1.0.0')
   })
 
   it('returns null when there are no usable candidates', () => {
-    expect(resolveTarget('1.0.0', info('x', []), 'latest')).toBeNull()
+    expect(resolveTarget('1.0.0', info('x', []), 'major')).toBeNull()
   })
 })
 
@@ -100,27 +126,27 @@ describe('analyzeDep', () => {
   })
 
   it('marks up-to-date deps', () => {
-    const a = analyzeDep(dep('vue', '^3.5.13'), info('vue', ['3.5.0', '3.5.13']), 'latest')
+    const a = analyzeDep(dep('vue', '^3.5.13'), info('vue', ['3.5.0', '3.5.13']), 'major')
     expect(a.skip).toBe('up-to-date')
     expect(a.target).toBeNull()
   })
 
   it('skips protocol specifiers', () => {
-    expect(analyzeDep(dep('ui', 'workspace:*'), undefined, 'latest').skip).toBe('protocol')
-    expect(analyzeDep(dep('x', 'catalog:'), undefined, 'latest').skip).toBe('protocol')
+    expect(analyzeDep(dep('ui', 'workspace:*'), undefined, 'major').skip).toBe('protocol')
+    expect(analyzeDep(dep('x', 'catalog:'), undefined, 'major').skip).toBe('protocol')
   })
 
   it('skips packages missing from the registry', () => {
     const a = analyzeDep(
       dep('ghost', '^1.0.0'),
       { name: 'ghost', versions: [], latest: null, exists: false },
-      'latest',
+      'major',
     )
     expect(a.skip).toBe('not-found')
   })
 
   it('skips complex ranges it cannot safely rewrite', () => {
-    const a = analyzeDep(dep('x', '>=1.0.0 <2.0.0'), info('x', ['1.0.0', '1.5.0']), 'latest')
+    const a = analyzeDep(dep('x', '>=1.0.0 <2.0.0'), info('x', ['1.0.0', '1.5.0']), 'major')
     expect(a.skip).toBe('unparseable')
   })
 })

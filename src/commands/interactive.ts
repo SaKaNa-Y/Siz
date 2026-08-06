@@ -9,6 +9,7 @@ import type {
   SearchResult,
   SizeSignals,
   TrustSignals,
+  VersionStrategy,
 } from '../core/types.ts'
 
 import { fetchLicenses } from '../core/license.ts'
@@ -325,23 +326,25 @@ async function runSetAction(
         clack.outro('Done.')
         return
       }
-      // One version policy for the whole selection: pin the exact version seen
-      // during search, or track the latest with a caret range.
-      const lock = ensure(
-        await clack.select<'exact' | 'caret'>({
+      // One version policy for the whole selection — the same four strategies
+      // `siz add --strategy` accepts, so neither path is the capable one.
+      const policy = ensure(
+        await clack.select<VersionStrategy>({
           message: 'Version policy',
           options: [
-            { value: 'caret', label: 'Track latest (caret ^)', hint: 'resolve fresh on install' },
+            { value: 'caret', label: 'Track minor (caret ^)', hint: 'resolve fresh on install' },
+            { value: 'tilde', label: 'Track patch (tilde ~)', hint: 'resolve fresh on install' },
+            { value: 'latest', label: 'Always latest', hint: 'no range recorded' },
             { value: 'exact', label: 'Lock exact version', hint: 'pin the version you saw' },
           ],
         }),
       )
       const entries: BundlePackage[] = selections.map((s) => {
         const depType: BundleDepType = s.dev ? 'devDependencies' : 'dependencies'
-        if (lock === 'exact') {
+        if (policy === 'exact') {
           return { name: s.name, strategy: 'exact', depType, version: versionCache.get(s.name) }
         }
-        return { name: s.name, strategy: 'caret', depType }
+        return { name: s.name, strategy: policy, depType }
       })
       addToBundle(target, entries)
       clack.log.success(`Added ${names.join(', ')} to bundle ${ansis.bold(target)}`)

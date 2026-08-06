@@ -11,7 +11,7 @@ import { fetchVersionInfo } from '../core/compare.ts'
 import { buildSyncCommand, detectPM, formatCommand, runInstall } from '../core/pm.ts'
 import { applyRangeEdits, relativeScope, writeManifest } from '../core/project.ts'
 import { discoverProjectDeps } from '../core/resolve.ts'
-import { planCatalog, planManifests } from '../core/upgrade.ts'
+import { DEFAULT_UPGRADE_MODE, planCatalog, planManifests } from '../core/upgrade.ts'
 import { clack, ensure, pickPackageManager } from '../ui/prompts.ts'
 import {
   renderUpgradeSummary,
@@ -20,7 +20,7 @@ import {
 } from '../ui/upgrade-render.ts'
 
 export interface UpgradeOptions {
-  /** Upgrade ceiling. Defaults to `latest` (no ceiling). */
+  /** Upgrade ceiling. Defaults to `major` (newest overall, no ceiling). */
   mode?: UpgradeMode
   /** Discover every package.json under cwd, not just the nearest one. */
   recursive?: boolean
@@ -72,7 +72,7 @@ function catalogKey(item: CatalogPlanItem): string {
  * manager once to apply them.
  */
 export async function runUpgrade(opts: UpgradeOptions = {}): Promise<void> {
-  const mode = opts.mode ?? 'latest'
+  const mode = opts.mode ?? DEFAULT_UPGRADE_MODE
   const cwd = opts.cwd ?? process.cwd()
 
   clack.intro(ansis.bold.cyan('siz upgrade'))

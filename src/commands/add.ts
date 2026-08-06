@@ -48,13 +48,25 @@ export async function runAdd(names: string[], opts: AddOptions = {}): Promise<vo
 function recordIntoBundle(names: string[], target: string, opts: AddOptions): void {
   const depType: BundleDepType = opts.dev ? 'devDependencies' : 'dependencies'
   const fallback: VersionStrategy = opts.strategy ?? 'caret'
+  const pinned: string[] = []
   const entries: BundlePackage[] = names.map((raw) => {
     const { name, version } = parseSpec(raw)
     // An explicit `@version` pins the entry exactly, overriding --strategy.
-    if (version) return { name, strategy: 'exact', depType, version }
+    if (version) {
+      pinned.push(name)
+      return { name, strategy: 'exact', depType, version }
+    }
     return { name, strategy: fallback, depType }
   })
   addToBundle(target, entries)
+  // Say when the two inputs disagreed, so a pinned entry is never a surprise.
+  if (pinned.length > 0 && opts.strategy && opts.strategy !== 'exact') {
+    console.log(
+      ansis.yellow(
+        `! ${pinned.join(', ')} pinned exact — an explicit @version overrides --strategy ${opts.strategy}`,
+      ),
+    )
+  }
   console.log(
     `${ansis.green('+')} added ${names.length} package${names.length === 1 ? '' : 's'} to bundle ${ansis.bold(target)}`,
   )

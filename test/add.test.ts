@@ -41,6 +41,26 @@ describe('runAdd mode dispatch', () => {
     ])
   })
 
+  it('notices that an explicit @version overrode --strategy', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    await runAdd(['lodash@4.17.21', 'zod'], { bundle: 'stack', strategy: 'tilde' })
+    expect(addToBundle).toHaveBeenCalledWith('stack', [
+      { name: 'lodash', strategy: 'exact', depType: 'dependencies', version: '4.17.21' },
+      { name: 'zod', strategy: 'tilde', depType: 'dependencies' },
+    ])
+    const notice = log.mock.calls.map((c) => String(c[0])).join('\n')
+    expect(notice).toMatch(/lodash/)
+    expect(notice).toMatch(/tilde/)
+    log.mockRestore()
+  })
+
+  it('stays quiet when no explicit strategy was given', async () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    await runAdd(['lodash@4.17.21'], { bundle: 'stack' })
+    expect(log.mock.calls.map((c) => String(c[0])).join('\n')).not.toMatch(/overrid/i)
+    log.mockRestore()
+  })
+
   it('records bundle dev entries with the given strategy', async () => {
     await runAdd(['vitest'], { bundle: 'stack', dev: true, strategy: 'tilde' })
     expect(addToBundle).toHaveBeenCalledWith('stack', [

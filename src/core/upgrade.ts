@@ -14,7 +14,27 @@ import {
 } from './compare.ts'
 
 /** Upgrade ceiling: how far a version is allowed to move. */
-export type UpgradeMode = 'major' | 'minor' | 'patch' | 'latest'
+export type UpgradeMode = 'major' | 'minor' | 'patch'
+
+/** Accepted `siz upgrade [level]` values, in the order the help text lists them. */
+export const UPGRADE_LEVELS: readonly UpgradeMode[] = ['major', 'minor', 'patch']
+
+/** The level bare `siz upgrade` means: newest overall. */
+export const DEFAULT_UPGRADE_MODE: UpgradeMode = 'major'
+
+/**
+ * Validate a `siz upgrade [level]` argument. Omitted means `major` (newest
+ * overall) — the one name for that ceiling, so `latest` is rejected like any
+ * other unknown level rather than silently aliasing `major`.
+ */
+export function parseUpgradeMode(level: string | undefined): UpgradeMode {
+  if (level == null) return DEFAULT_UPGRADE_MODE
+  const mode = level as UpgradeMode
+  if (!UPGRADE_LEVELS.includes(mode)) {
+    throw new Error(`Unknown upgrade level "${level}". Use: ${UPGRADE_LEVELS.join(' | ')}`)
+  }
+  return mode
+}
 
 /** Why a dependency was excluded from the upgradable set. */
 export type SkipReason = CompareSkip | 'up-to-date'
@@ -56,9 +76,9 @@ export interface UpgradePlan {
  * Resolve the highest version reachable from `current` under `mode`.
  *
  * Ceiling semantics (taze-style):
- * - `patch`        → newest within the same major.minor (`~current`)
- * - `minor`        → newest within the same major (`^current`)
- * - `major`/`latest` → newest stable overall (`*`)
+ * - `patch` → newest within the same major.minor (`~current`)
+ * - `minor` → newest within the same major (`^current`)
+ * - `major` → newest stable overall (`*`)
  *
  * Pre-1.0 caution comes for free: caret/tilde on a `0.x` version already keep
  * the bump inside the same `0.minor`, so `siz upgrade minor` won't cross a

@@ -3,7 +3,6 @@ import ansis from 'ansis'
 import { cac } from 'cac'
 
 import type { VersionStrategy } from './core/types.ts'
-import type { UpgradeMode } from './core/upgrade.ts'
 
 import packageJson from '../package.json' with { type: 'json' }
 import { runAdd } from './commands/add.ts'
@@ -21,6 +20,7 @@ import { runRemove } from './commands/remove.ts'
 import { assertNoRemovedFlags } from './commands/removed-flags.ts'
 import { runSearchPrint } from './commands/search.ts'
 import { runUpgrade } from './commands/upgrade.ts'
+import { parseUpgradeMode } from './core/upgrade.ts'
 
 const cli = cac('siz')
 
@@ -78,10 +78,11 @@ cli
   )
   .option('-b, --bundle <name>', 'Record packages into a named bundle instead of installing')
   .option('-D, --dev', 'Install / record as devDependencies')
+  // No cac default here: `runAdd` falls back to caret, and leaving the option
+  // unset is what tells it the user didn't ask for a strategy at all.
   .option(
     '-s, --strategy <strategy>',
-    'Version strategy for bundle entries: latest | exact | caret | tilde',
-    { default: 'caret' },
+    'Version strategy for bundle entries: latest | exact | caret | tilde (default: caret)',
   )
   .option('--no-rules', 'Bypass dependency rules in siz.config.json when installing')
   .action(
@@ -90,10 +91,10 @@ cli
       packages: string[],
       opts: { bundle?: string; dev?: boolean; strategy?: string; rules?: boolean },
     ) => {
-      const strategy = (opts.strategy ?? 'caret') as VersionStrategy
-      if (!ADD_STRATEGIES.includes(strategy)) {
+      const strategy = opts.strategy as VersionStrategy | undefined
+      if (strategy && !ADD_STRATEGIES.includes(strategy)) {
         throw new Error(
-          `Unknown version strategy "${strategy}". Use: latest | exact | caret | tilde`,
+          `Unknown version strategy "${strategy}". Use: ${ADD_STRATEGIES.join(' | ')}`,
         )
       }
       await runAdd([pkg, ...packages], {
@@ -144,22 +145,17 @@ cli
     },
   )
 
-const UPGRADE_LEVELS = ['major', 'minor', 'patch', 'latest'] as const
-
 cli
-  .command(
-    'upgrade [level]',
-    'Upgrade project dependencies (level: major | minor | patch | latest)',
-  )
+  .command('upgrade [level]', 'Upgrade project dependencies (level: major | minor | patch)')
   .alias('up')
   .option('-r, --recursive', 'Recursively upgrade every package.json under the current directory')
   .option('--dry-run', 'Preview updates without writing package.json or installing')
   .action(async (level: string | undefined, opts: { recursive?: boolean; dryRun?: boolean }) => {
-    const mode = (level ?? 'latest') as UpgradeMode
-    if (!UPGRADE_LEVELS.includes(mode)) {
-      throw new Error(`Unknown upgrade level "${level}". Use: major | minor | patch | latest`)
-    }
-    await runUpgrade({ mode, recursive: opts.recursive, dryRun: opts.dryRun })
+    await runUpgrade({
+      mode: parseUpgradeMode(level),
+      recursive: opts.recursive,
+      dryRun: opts.dryRun,
+    })
   })
 
 cli
@@ -206,9 +202,38 @@ const EXAMPLES = [
   'siz upgrade minor',
 ]
 
+/** One rendered block of cac's help output (cac doesn't export the type). */
+interface HelpSection {
+  title?: string
+  body: string
+}
+
+/**
+ * cac forces `default: true` onto every `--no-x` flag, so its help renders
+ * "(default: true)" — which reads as though the bypass were on by default. The
+ * description already says what the flag does; drop the misleading default.
+ */
+function stripNegatedDefaults(sections: HelpSection[]): HelpSection[] {
+  return sections.map((section) =>
+    section.title === 'Options'
+      ? {
+          ...section,
+          body: section.body
+            .split('\n')
+            .map((line) =>
+              line.trimStart().startsWith('--no-')
+                ? line.replace(/\s*\(default: true\)\s*$/, '')
+                : line,
+            )
+            .join('\n'),
+        }
+      : section,
+  )
+}
+
 cli.help((sections) => {
   // Drop cac's verbose per-command "--help" footer.
-  const trimmed = sections.filter((s) => !s.title?.startsWith('For more info'))
+  const trimmed = stripNegatedDefaults(sections.filter((s) => !s.title?.startsWith('For more info')))
   // Only the top-level help lists Commands; enrich it with the description (kept in
   // sync with package.json) and usage examples, leaving per-command help untouched.
   if (trimmed.some((s) => s.title === 'Commands')) {
