@@ -233,7 +233,9 @@ function stripNegatedDefaults(sections: HelpSection[]): HelpSection[] {
 
 cli.help((sections) => {
   // Drop cac's verbose per-command "--help" footer.
-  const trimmed = stripNegatedDefaults(sections.filter((s) => !s.title?.startsWith('For more info')))
+  const trimmed = stripNegatedDefaults(
+    sections.filter((s) => !s.title?.startsWith('For more info')),
+  )
   // Only the top-level help lists Commands; enrich it with the description (kept in
   // sync with package.json) and usage examples, leaving per-command help untouched.
   if (trimmed.some((s) => s.title === 'Commands')) {
