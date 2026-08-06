@@ -13,10 +13,6 @@ _Avoid_: "name filter", "name search", "name mode" (all describe the removed beh
 **Result signal**:
 The umbrella term for any fact siz attaches inline to a search result to help the user judge it *before* installing — the parent of [[#trust-signal|trust signals]] (health), [[#size-signal|size signals]] (weight), and [[#license-signal|license signals]] (legal). All result signals share the same contract: purely informational (never block, filter, or reorder), fetched outside the search endpoint, and degrade silently when unavailable. What distinguishes the families is the *kind* of fact, not the mechanism.
 
-**Signal window**:
-The slice of a result list whose eager [[#result-signal|result signals]] are actually fetched: the rows visible in the interactive box plus a small prefetch margin either side, tracking the focused row as the user scrolls. Rows outside it are simply *not fetched yet* — they fill in on scroll, and a name already fetched is never re-requested. The window is a **cost** device, not a display one: it changes how much network a search buys, never what a row shows, and it applies to the interactive box alone (`--list` and `--json` print every result, so they fetch signals for every result). [[#bundle-size|Bundle size]] is outside it entirely — focused-row-only by its own rule.
-_Avoid_: "pagination", "lazy signals" (bundle size is the lazy one; the windowed signals are still eager, just bounded).
-
 **Trust signal**:
 A **health/maintenance** fact about a package (one family of [[#result-signal|result signal]]), surfaced inline on a search result so the user can judge it before installing. The set is deprecation status, publish age, provenance, [[#download-count-weekly|weekly download count]], and [[#momentum|momentum]]. Distinct from a [[#size-signal|size signal]], which is about *weight*, not health.
 _Avoid_: health badge, quality indicator (both read as a graded verdict siz does not form)
@@ -25,10 +21,11 @@ _Avoid_: health badge, quality indicator (both read as a graded verdict siz does
 The Discover-track capability of attaching [[#trust-signal|trust signals]] to search results. It is purely informational — it never blocks or filters; it only informs the choice to install.
 
 **Provenance**:
-Verifiable evidence (npm's signed attestation) that a published package was built from the source it claims — read as the presence of `dist.attestations` on the packument. Distinct from `trustedPublisher`, npm's separate flag for publisher identity, which the signal **no longer covers**: since deprecation and provenance moved onto the packument, `✓` means *attested*, one fact from one source, rather than either-of-two from a hosted aggregator. **Positive-only**: a green `✓` shows when an attestation is present; absence renders nothing (adoption is still low, so flagging its absence would be noise).
+Verifiable evidence (npm's signed **attestation**) that a published package was built from the source it claims. Distinct from `trustedPublisher`, npm's separate flag for publisher *identity*, which the signal **no longer covers**: `✓` means *attested*, one claim from one source, rather than either-of-two merged by a hosted aggregator. **Positive-only**: `✓` shows when an attestation is present; absence renders nothing (adoption is still low, so flagging its absence would be noise). See ADR 0012.
+_Avoid_: "verified publisher", "trusted publisher" (that is the separate identity flag this signal deliberately excludes).
 
 **Score** (retired):
-npm's quality/popularity/maintenance numbers, once returned by the search endpoint and rendered as bars. The registry retired them — it now returns a constant `1.000` for all three on every package — so siz no longer parses, renders, or emits them; the [[#download-count-weekly|weekly download count]] took their place on the row. What remains is the endpoint's **relevance number** (`searchScore`), and it is strictly internal: the last tiebreaker in [[#name-affinity|name-affinity]] ranking, never shown and never in `--json`.
+npm's quality/popularity/maintenance numbers, once returned by the search endpoint and rendered as bars. The endpoint now returns a constant `1.000` for all three on every package, so they carry no information — siz no longer parses, renders, or emits them; the [[#download-count-weekly|weekly download count]] took their place on the row. What remains is the endpoint's **relevance number**, and it is strictly internal: an opaque figure on no stated scale (not a 0..1 fraction, despite how siz once described it), used as the last tiebreaker in [[#name-affinity|name-affinity]] ranking and never shown, never in `--json`. See ADR 0011.
 _Avoid_: talking about "the score bars" as a current feature, or "popularity" as something siz displays.
 
 **Stale**:
@@ -42,11 +39,11 @@ The successor package name(s) a [[#deprecated|deprecated]] package's own message
 _Avoid_: "alternative", "recommendation" (those are the editorial, curated feature, not this).
 
 **Download count** (weekly):
-A package's **last-week download total** from npm's download API — the adoption fact that took over the row space npm's retired [[#score|score]] bars occupied. Shown on **every** result row (interactive, `--list`, and the `--json` `downloads` field), humanized by magnitude (`812`, `1.5k`, `340k`, `12.3M`). A [[#trust-signal|trust signal]] like [[#momentum|momentum]], and from the same source: unscoped names get the count out of the bulk response momentum already needs, scoped names get it from the single-package endpoint. **A count siz never learned renders nothing, not a zero** — the same unknown-vs-finding distinction the [[#unknown-license|unknown license]] draws.
+A package's **last-week download total** from npm's download API — the adoption fact that took over the row space npm's retired [[#score|score]] bars occupied. Shown on **every** result row (interactive, `--list`, and the `--json` `downloads` field), humanized by magnitude (`812`, `1.5k`, `340k`, `12.3M`). A [[#trust-signal|trust signal]] like [[#momentum|momentum]] and from the same source, but available for **every** package — including the scoped names (`@types/node`, `@babel/core`) that get no arrow. **A count siz never learned renders nothing, not a zero** — the same unknown-vs-finding distinction the [[#unknown-license|unknown license]] draws. See ADR 0011.
 _Avoid_: "popularity" (that is the retired [[#score|score]]), "download count" alone (say *weekly* — the period is part of the fact).
 
 **Momentum** (download trend):
-The direction of a package's recent download volume — **rising** (`↑`, green) or **falling** (`↓`, red) — derived from npm's download API, a separate source from the metadata behind the other [[#trust-signal|trust signals]]. It is a [[#trust-signal|trust signal]] about *change over time*, and distinct from the [[#download-count-weekly|weekly download count]] it is computed alongside: one is a level, the other a direction. **Approximate by design** (a two-call proxy, see ADR 0002) and **two-sided** (unlike positive-only [[#provenance|provenance]], both directions show). Suppressed below a download-volume floor (too noisy) and **unavailable for scoped packages** (`@scope/pkg`), for which only the single-period count is fetched — those show a count but never an arrow. Flat/unknown renders nothing.
+The **direction** of a package's recent download volume — **rising** (`↑`, green) or **falling** (`↓`, red) — *derived* from [[#download-count-weekly|download counts]] over two periods. The count is the primary fact and momentum is the reading taken from it: one is a level, the other a direction, and the arrow never appears without a count behind it. **Approximate by design** (a two-call proxy, see ADR 0002) and **two-sided** (unlike positive-only [[#provenance|provenance]], both directions show). Suppressed below a download-volume floor (too noisy) and **unavailable for scoped packages** (`@scope/pkg`), for which only the single-period count is fetched — those show a count but never an arrow. Flat/unknown renders nothing.
 _Avoid_: "popularity" (that is the retired [[#score|score]]), "downloads" (that is the [[#download-count-weekly|count]]; momentum is direction).
 
 **Size signal**:
@@ -72,6 +69,24 @@ _Avoid_: "undeclared license" (`UNLICENSED` and `SEE LICENSE IN …` *are* decla
 **Unknown license** (absence of data):
 The state where siz **never learned** a package's license — the packument request failed, timed out, or has not returned yet. Strictly distinct from an [[#unclear-license|unclear license]], which is a *finding*. Unknown is the absence of a finding and renders **nothing at all**: no text, no glyph. Conflating the two would let one slow network call flag every result on screen as having no license. See ADR 0009.
 _Avoid_: "no license" (that is a finding, not missing data).
+
+### Organize
+
+**Bundle**:
+A **named group of [[#saved-entry|saved entries]]** — the only place siz saves a package, and the whole of the Organize track's storage. Each entry records the package name, the dependency bucket it belongs in, and its [[#version-strategy|version strategy]]; the bundle itself is a reusable stack the user can install in one go (`siz bundle install <name>`). A bundle is **categorization the user chose**, which is why siz forms no taxonomy of its own — the removed heuristic category label was a guess in the same row position as fetched facts, and bundles make it redundant. Lives in the user-global data store, not in the project, which is why saving is never installing. Every bundle's entries are also reachable together through the [[#front-door|front door]]. See ADR 0010.
+_Avoid_: "favorites" (the removed second store — existing favorites now live in a bundle named `favorites`), "category", "tag" (a bundle is named, not classified), "group" alone (ambiguous with a workspace).
+
+**Saved entry**:
+One package **inside** a [[#bundle|bundle]] — the unit siz saves, lists, and removes. An entry is always tagged with the bundle it came from, so the same package saved in two bundles is two entries, not one. Saving and unsaving an entry is **independent of the project**: recording one installs nothing, and removing one uninstalls nothing (that is `siz rm`). Removing the last entry leaves the bundle behind, empty.
+_Avoid_: "favorite" (removed), "dependency" (an entry is a *record* of a package, not a package installed in a project).
+
+**Front door**:
+What an **empty query** opens: one flat list of every [[#saved-entry|saved entry]] across every [[#bundle|bundle]], each row tagged with its bundle, from which the user can select several and act on them together — the same action set search results offer. It exists so that collapsing two stores into one never cost a level of navigation: the saved list stays exactly one keystroke deep. `siz list` prints the same list for scripting, narrowable to one bundle, so the interactive and scriptable views are the same data by construction.
+_Avoid_: "favorites list" (removed), "home screen", "dashboard" (it is a selectable list, not a view).
+
+**Version strategy**:
+How a [[#saved-entry|saved entry]] tracks versions when it is installed — `latest`, `exact`, `caret`, or `tilde`. It is a property of the *record*, chosen when the package is saved (or by `--strategy`), not of anything in the project. An explicit `@version` at save time pins the entry `exact` and wins over any strategy given alongside it.
+_Avoid_: "range", "constraint" (those describe what a `package.json` already declares; a strategy describes what siz will write).
 
 ### Manage
 

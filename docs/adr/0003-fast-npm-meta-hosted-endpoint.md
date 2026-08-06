@@ -2,7 +2,7 @@
 
 ## Status
 
-accepted
+accepted — **partially superseded by ADR 0012**: deprecation and provenance now come from the npm packument siz already fetches per result, so the hosted aggregator is consulted for **publish age** alone among the trust signals. Upgrade resolution and bundle install still go through it, and everything below still describes them.
 
 ## Context & Decision
 

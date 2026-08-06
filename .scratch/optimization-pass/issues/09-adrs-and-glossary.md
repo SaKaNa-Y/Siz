@@ -22,18 +22,18 @@ Parent spec: `.scratch/optimization-pass/PRD.md`.
 
 **Blocked by:** 01, 02, 03, 05, 06.
 
-**Status:** ready-for-agent
+**Status:** done
 
-- [ ] ADR 0010 written, covering favorites removal, the v4 migration, categories removal and the flat front door, with the alternatives that were rejected
-- [ ] ADR 0011 written, recording the constant-`1.000` score evidence and the non-fractional relevance number
-- [ ] ADR 0012 written, stating what it supersedes in ADR 0003, the attestation-only narrowing, and why the abbreviated packument was rejected
-- [ ] Each ADR follows the format of the existing ADRs in this repo and is numbered consecutively
-- [ ] ADR 0003 notes that it is partially superseded by 0012
-- [ ] The glossary's Score entry is rewritten to describe an opaque relevance number used for tiebreaking
-- [ ] The glossary's Provenance entry is narrowed to the attestation
-- [ ] The glossary's Momentum entry makes the count primary and the arrow derived, and states the scoped-package gap
-- [ ] A Download count entry is added under the trust family
-- [ ] An Organize section is added with Bundle, Saved entry and Front door entries, cross-linked to related terms
-- [ ] Glossary entries for removed concepts (favorites, heuristic categories, the old Score framing) no longer describe behavior that does not exist
-- [ ] The glossary contains no implementation detail
-- [ ] `pnpm lint` passes (docs-only ticket — no changeset needed)
+- [x] ADR 0010 written, covering favorites removal, the v4 migration, categories removal and the flat front door, with the alternatives that were rejected
+- [x] ADR 0011 written, recording the constant-`1.000` score evidence and the non-fractional relevance number
+- [x] ADR 0012 written, stating what it supersedes in ADR 0003, the attestation-only narrowing, and why the abbreviated packument was rejected
+- [x] Each ADR follows the format of the existing ADRs in this repo and is numbered consecutively
+- [x] ADR 0003 notes that it is partially superseded by 0012
+- [x] The glossary's Score entry is rewritten to describe an opaque relevance number used for tiebreaking
+- [x] The glossary's Provenance entry is narrowed to the attestation
+- [x] The glossary's Momentum entry makes the count primary and the arrow derived, and states the scoped-package gap
+- [x] A Download count entry is added under the trust family
+- [x] An Organize section is added with Bundle, Saved entry and Front door entries, cross-linked to related terms
+- [x] Glossary entries for removed concepts (favorites, heuristic categories, the old Score framing) no longer describe behavior that does not exist
+- [x] The glossary contains no implementation detail
+- [x] `pnpm lint` passes (docs-only ticket — no changeset needed)
