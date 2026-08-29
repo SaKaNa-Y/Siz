@@ -45,7 +45,8 @@
     "prepublishOnly": "pnpm run build",
     "changeset": "changeset",
     "version-packages": "changeset version && pnpm format:fix",
-    "release": "pnpm build && changeset publish"
+    "release": "pnpm build && changeset publish",
+    "prototype:audit-output": "node prototypes/audit-output-prototype/server.mjs"
   },
   "dependencies": {
     "@clack/core": "^1.4.1",
