@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light" />
+    <title>Audit Output Foundry — Siz prototype</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <!-- Three variants of the planned `siz check` interface, switchable via `?variant=`, in a throwaway standalone route. -->
+    <main class="page-shell">
+      <header class="masthead">
+        <div class="masthead__mark" aria-hidden="true">SIZ / 06</div>
+        <div class="masthead__copy">
+          <p class="eyebrow">Throwaway interface study · no real fetching</p>
+          <h1>Audit Output Foundry</h1>
+          <p>
+            Decide how <code>siz check</code> reads under pressure: one clean project, one small
+            failure, forty findings, and a network that taught us nothing.
+          </p>
+        </div>
+        <a
+          class="ticket-link"
+          href="https://github.com/SaKaNa-Y/Siz/issues/58"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Decision ticket ↗
+        </a>
+      </header>
+
+      <section class="workbench" aria-label="Audit output prototype">
+        <aside class="scenario-panel" aria-labelledby="scenario-heading">
+          <p class="panel-kicker">Input pressure</p>
+          <h2 id="scenario-heading">Scenario</h2>
+          <div id="scenario-list" class="scenario-list"></div>
+          <div class="fixed-decisions">
+            <p class="panel-kicker">Already fixed</p>
+            <ul>
+              <li><span class="dot dot--error"></span> Error, warn, and off are distinct.</li>
+              <li><span class="dot dot--unknown"></span> Unknown is never a finding.</li>
+              <li><span class="dot dot--warn"></span> Warnings never fail the run.</li>
+              <li><span class="dot dot--off"></span> The audit has no bypass.</li>
+            </ul>
+          </div>
+        </aside>
+
+        <article class="stage">
+          <div class="stage__toolbar">
+            <div>
+              <p class="panel-kicker">Current proposal</p>
+              <h2 id="variant-title"></h2>
+            </div>
+            <div id="view-tabs" class="segmented" aria-label="Output view"></div>
+          </div>
+          <div id="output" class="output-frame" aria-live="polite"></div>
+          <div id="caption" class="caption"></div>
+        </article>
+
+        <aside class="decision-panel" aria-labelledby="decision-heading">
+          <p class="panel-kicker">What this bets on</p>
+          <h2 id="decision-heading">Design argument</h2>
+          <div id="variant-notes"></div>
+          <div class="reading-guide">
+            <p class="panel-kicker">Questions to answer</p>
+            <ol>
+              <li>Can you find the blocking fact in five seconds?</li>
+              <li>Does forty findings still feel navigable?</li>
+              <li>Can CI distinguish a violation from missing evidence?</li>
+              <li>Would you keep this command enabled?</li>
+            </ol>
+          </div>
+        </aside>
+      </section>
+    </main>
+
+    <nav class="variant-switcher" aria-label="Prototype variants">
+      <button id="previous-variant" type="button" aria-label="Previous variant">←</button>
+      <div>
+        <span class="switcher-label">Variant</span>
+        <strong id="switcher-title"></strong>
+      </div>
+      <button id="next-variant" type="button" aria-label="Next variant">→</button>
+    </nav>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
