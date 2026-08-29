@@ -146,7 +146,7 @@ Three layers, top to bottom: **Commands** orchestrate flow → **Core** holds lo
 
 ### Issue tracker
 
-Issues live as local markdown under `.scratch/<feature>/`. See `docs/agents/issue-tracker.md`.
+Issues, PRDs, maps, research, status, and discussion live in [GitHub Issues](https://github.com/SaKaNa-Y/Siz/issues). For publishing, fetching, triage, blockers, or claiming work, follow `docs/agents/issue-tracker.md`; `.scratch/` is not an issue tracker.
 
 ### Triage labels
 
