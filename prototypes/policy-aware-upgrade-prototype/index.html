@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light" />
+    <title>Upgrade Policy Lab — Siz prototype</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <!-- Three variants of policy-aware upgrade behavior, switchable via `?variant=`, on a throwaway standalone route. -->
+    <div class="blueprint" aria-hidden="true"></div>
+    <main class="shell">
+      <header class="masthead">
+        <div class="issue-stamp">
+          <span>SIZ</span>
+          <strong>11</strong>
+          <small>DECISION PROTOTYPE</small>
+        </div>
+        <div class="masthead__copy">
+          <p class="eyebrow">Manage × Govern · target-version evidence</p>
+          <h1>Should an upgrade be allowed to cross a policy line?</h1>
+          <p class="lede">
+            Compare three interaction contracts against the same seven targets. The package files,
+            registry calls, and install step are all inert.
+          </p>
+        </div>
+        <a
+          class="ticket-link"
+          href="https://github.com/SaKaNa-Y/Siz/issues/63"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Decision ticket <span>↗</span>
+        </a>
+      </header>
+
+      <section class="lab" aria-label="Policy-aware upgrade prototype">
+        <aside class="rail rail--left">
+          <div class="rail-heading">
+            <span class="rail-index">01</span>
+            <div>
+              <p class="kicker">Pressure case</p>
+              <h2>Scenario</h2>
+            </div>
+          </div>
+          <div id="scenario-list" class="scenario-list"></div>
+
+          <div class="fixed-card">
+            <p class="kicker">Already decided</p>
+            <ul>
+              <li>
+                <span class="status-mark status-mark--error">×</span> A verdict comes from committed
+                policy.
+              </li>
+              <li>
+                <span class="status-mark status-mark--warn">!</span> A warning never blocks or
+                fails.
+              </li>
+              <li>
+                <span class="status-mark status-mark--unknown">?</span> Unknown evidence is not a
+                finding.
+              </li>
+              <li>
+                <span class="status-mark status-mark--accepted">≈</span> A baseline is Audit-only
+                context.
+              </li>
+            </ul>
+          </div>
+        </aside>
+
+        <section class="stage">
+          <div class="stage-toolbar">
+            <div>
+              <p class="kicker">Current proposition</p>
+              <h2 id="variant-heading"></h2>
+            </div>
+            <div id="view-tabs" class="view-tabs" aria-label="Prototype view"></div>
+          </div>
+
+          <div id="terminal" class="terminal" aria-live="polite"></div>
+          <div id="state-strip" class="state-strip"></div>
+        </section>
+
+        <aside class="rail rail--right">
+          <div class="rail-heading">
+            <span class="rail-index">02</span>
+            <div>
+              <p class="kicker">Decision lens</p>
+              <h2>Design argument</h2>
+            </div>
+          </div>
+          <div id="variant-notes" class="variant-notes"></div>
+
+          <div class="question-card">
+            <p class="kicker">React to these</p>
+            <ol>
+              <li>Should an <code>error</code> target be impossible to select?</li>
+              <li>Is unknown evidence loud enough without becoming a false violation?</li>
+              <li>Does accepted debt explain the delta without authorizing it?</li>
+              <li>Is <code>outdated</code> still recognizably a drift report?</li>
+            </ol>
+          </div>
+        </aside>
+      </section>
+    </main>
+
+    <nav class="variant-switcher" aria-label="Prototype variants">
+      <button id="previous-variant" type="button" aria-label="Previous variant">←</button>
+      <div class="variant-switcher__label">
+        <span>PROTOTYPE VARIANT</span>
+        <strong id="switcher-title"></strong>
+      </div>
+      <button id="next-variant" type="button" aria-label="Next variant">→</button>
+    </nav>
+
+    <script type="module" src="/app.js"></script>
+  </body>
+</html>
