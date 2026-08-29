@@ -46,7 +46,8 @@
     "changeset": "changeset",
     "version-packages": "changeset version && pnpm format:fix",
     "release": "pnpm build && changeset publish",
-    "prototype:audit-output": "node prototypes/audit-output-prototype/server.mjs"
+    "prototype:audit-output": "node prototypes/audit-output-prototype/server.mjs",
+    "prototype:policy-aware-upgrade": "node prototypes/policy-aware-upgrade-prototype/server.mjs"
   },
   "dependencies": {
     "@clack/core": "^1.4.1",
