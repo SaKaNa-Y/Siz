@@ -241,34 +241,57 @@ const outdatedRows = [
     current: '18.2.0',
     wanted: '18.3.1',
     latest: '19.1.1',
-    policy: { kind: 'pass', label: 'latest passes' },
+    wantedPolicy: { kind: 'pass', label: 'wanted passes' },
+    latestPolicy: { kind: 'pass', label: 'latest passes' },
   },
   {
     name: 'image-pipeline',
     current: '2.4.0',
     wanted: '2.4.4',
     latest: '3.0.0',
-    policy: { kind: 'error', label: 'license · error', detail: 'GPL-3.0-only' },
+    wantedPolicy: { kind: 'pass', label: 'wanted passes' },
+    latestPolicy: { kind: 'error', label: 'license · error', detail: 'GPL-3.0-only' },
   },
   {
     name: 'ui-compat',
     current: '6.1.0',
     wanted: '6.2.1',
     latest: '7.0.0',
-    policy: { kind: 'warn', label: 'provenance · warn', detail: 'no attestation' },
+    wantedPolicy: { kind: 'pass', label: 'wanted passes' },
+    latestPolicy: { kind: 'warn', label: 'provenance · warn', detail: 'no attestation' },
   },
   {
     name: 'private-addon',
     current: '3.1.4',
     wanted: '3.2.0',
     latest: '4.0.0',
-    policy: {
+    wantedPolicy: {
+      kind: 'unknown',
+      label: 'wanted facts unknown',
+      detail: 'registry request timed out',
+    },
+    latestPolicy: {
       kind: 'unknown',
       label: 'latest facts unknown',
       detail: 'license, installSize, deprecated, provenance',
     },
   },
 ]
+
+const outdatedCandidates = outdatedRows.flatMap((row) => [
+  {
+    name: row.name,
+    target: 'WANTED',
+    version: row.wanted,
+    policy: row.wantedPolicy,
+  },
+  {
+    name: row.name,
+    target: 'LATEST',
+    version: row.latest,
+    policy: row.latestPolicy,
+  },
+])
 
 const views = [
   { key: 'upgrade', name: 'Upgrade prompt' },
@@ -805,7 +828,7 @@ function renderEvidenceReview() {
 
 function renderOutdatedTable() {
   return (
-    '<div class="outdated-table"><div class="outdated-row outdated-row--head"><span>PACKAGE</span><span>CURRENT</span><span>WANTED</span><span>LATEST</span><span>POLICY (LATEST)</span></div>' +
+    '<div class="outdated-table"><div class="outdated-row outdated-row--head"><span>PACKAGE</span><span>CURRENT</span><span>WANTED + POLICY</span><span>LATEST + POLICY</span></div>' +
     outdatedRows
       .map(
         (row) =>
@@ -813,12 +836,14 @@ function renderOutdatedTable() {
           escapeHtml(row.name) +
           '</strong><span>' +
           escapeHtml(row.current) +
-          '</span><span>' +
+          '</span><span class="outdated-candidate"><b>' +
           escapeHtml(row.wanted) +
-          '</span><b>' +
+          '</b>' +
+          verdictBadge(row.wantedPolicy) +
+          '</span><span class="outdated-candidate"><b>' +
           escapeHtml(row.latest) +
-          '</b><span>' +
-          verdictBadge(row.policy) +
+          '</b>' +
+          verdictBadge(row.latestPolicy) +
           '</span></div>',
       )
       .join('') +
@@ -830,14 +855,17 @@ function renderOutdated() {
   let content = ''
   if (currentVariant.key === 'A') {
     content =
-      '<div class="outdated-intro"><span>4 outdated</span><p>Append one compact target verdict; keep the familiar drift table intact.</p></div>' +
+      '<div class="outdated-intro"><span>4 outdated · 8 candidates</span><p>Annotate Wanted and Latest independently while preserving the familiar drift table.</p></div>' +
       renderOutdatedTable()
   } else if (currentVariant.key === 'B') {
     const groups = [
-      ['POLICY PASS', outdatedRows.filter((row) => row.policy.kind === 'pass')],
-      ['POLICY WARN', outdatedRows.filter((row) => row.policy.kind === 'warn')],
-      ['POLICY ERROR', outdatedRows.filter((row) => row.policy.kind === 'error')],
-      ['EVIDENCE UNKNOWN', outdatedRows.filter((row) => row.policy.kind === 'unknown')],
+      ['POLICY PASS', outdatedCandidates.filter((candidate) => candidate.policy.kind === 'pass')],
+      ['POLICY WARN', outdatedCandidates.filter((candidate) => candidate.policy.kind === 'warn')],
+      ['POLICY ERROR', outdatedCandidates.filter((candidate) => candidate.policy.kind === 'error')],
+      [
+        'EVIDENCE UNKNOWN',
+        outdatedCandidates.filter((candidate) => candidate.policy.kind === 'unknown'),
+      ],
     ]
     content =
       '<div class="outdated-scoreboard">' +
@@ -851,21 +879,21 @@ function renderOutdated() {
       groups
         .filter(([, rows]) => rows.length > 0)
         .map(
-          ([name, rows]) =>
+          ([name, candidates]) =>
             '<section><h3>' +
             name +
             '</h3>' +
-            rows
+            candidates
               .map(
-                (row) =>
+                (candidate) =>
                   '<div class="outdated-card"><strong>' +
-                  escapeHtml(row.name) +
+                  escapeHtml(candidate.name) +
                   '</strong><span>' +
-                  escapeHtml(row.current) +
-                  ' → ' +
-                  escapeHtml(row.latest) +
+                  escapeHtml(candidate.target) +
+                  ' · ' +
+                  escapeHtml(candidate.version) +
                   '</span>' +
-                  verdictBadge(row.policy) +
+                  verdictBadge(candidate.policy) +
                   '</div>',
               )
               .join('') +
@@ -881,16 +909,20 @@ function renderOutdated() {
           (row) =>
             '<article><div class="timeline-track"><span></span><span></span><span></span></div><div class="timeline-copy"><header><strong>' +
             escapeHtml(row.name) +
-            '</strong>' +
-            verdictBadge(row.policy) +
-            '</header><div><span>CURRENT <b>' +
+            '</strong><span>2 candidate verdicts</span></header><div><span>CURRENT <b>' +
             escapeHtml(row.current) +
-            '</b></span><span>WANTED <b>' +
+            '</b></span><span class="timeline-candidate">WANTED <b>' +
             escapeHtml(row.wanted) +
-            '</b></span><span>LATEST <b>' +
+            '</b>' +
+            verdictBadge(row.wantedPolicy) +
+            '</span><span class="timeline-candidate">LATEST <b>' +
             escapeHtml(row.latest) +
-            '</b></span></div><small>' +
-            escapeHtml(row.policy.detail ?? 'all configured latest-version facts passed') +
+            '</b>' +
+            verdictBadge(row.latestPolicy) +
+            '</span></div><small>Wanted: ' +
+            escapeHtml(row.wantedPolicy.detail ?? 'all configured exact-version facts passed') +
+            ' · Latest: ' +
+            escapeHtml(row.latestPolicy.detail ?? 'all configured exact-version facts passed') +
             '</small></div></article>',
         )
         .join('') +
@@ -898,11 +930,11 @@ function renderOutdated() {
   }
 
   return (
-    terminalHeader('siz outdated', 'read-only drift report · latest-target policy annotation') +
+    terminalHeader('siz outdated', 'read-only drift report · Wanted + Latest policy annotations') +
     '<div class="terminal-body terminal-body--outdated">' +
     content +
     '<div class="outdated-exit"><div><span>DEFAULT EXIT</span><strong>0</strong><small>policy annotations never turn outdated into Audit</small></div><div><span>WITH --exit-code</span><strong>1</strong><small>because dependencies are outdated, not because policy failed</small></div></div>' +
-    '<p class="outdated-contract">Current keeps its range-floor meaning. Policy evaluates the <strong>Latest</strong> candidate only; Wanted remains registry-comparison information.</p>' +
+    '<p class="outdated-contract">Current keeps its range-floor meaning. Policy evaluates the exact <strong>Wanted</strong> and <strong>Latest</strong> candidates independently; when they resolve to the same version, fetch and render one verdict.</p>' +
     '</div>'
   )
 }
